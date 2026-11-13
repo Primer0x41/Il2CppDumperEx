@@ -1,0 +1,204 @@
+using System.Buffers.Binary;
+using System.Text;
+using Il2CppDumperEx.Core;
+using Xunit;
+
+namespace Il2CppDumperEx.Tests;
+
+public class DiscoveryAndValidationTests
+{
+    private static byte[] BuildValidStringHeap(int size = 1024)
+    {
+        string[] words =
+        [
+            "System", "String", "Int32", "Boolean", "UnityEngine",
+            "GameObject", "Transform", "MonoBehaviour", "Component",
+            "Vector3", "Quaternion", "Camera", "AudioSource", "Collider"
+        ];
+
+        var ms = new MemoryStream();
+        foreach (var w in words)
+        {
+            byte[] bytes = Encoding.ASCII.GetBytes(w + "\0");
+            ms.Write(bytes, 0, bytes.Length);
+        }
+
+        byte[] pad = Encoding.ASCII.GetBytes("field_name_identifier\0");
+        while (ms.Length < size)
+        {
+            ms.Write(pad, 0, pad.Length);
+        }
+
+        byte[] result = new byte[size];
+        ms.Position = 0;
+        ms.Read(result, 0, size);
+        return result;
+    }
+
+    private static byte[] BuildMockMetadataFile(int version, int totalSize = 4096)
+    {
+        byte[] buf = new byte[totalSize];
+        Span<byte> span = buf.AsSpan();
+
+        // Magic + Version
+        Nep2Decryptor.MagicBytes.CopyTo(span.Slice(0, 4));
+        BinaryPrimitives.WriteInt32LittleEndian(span.Slice(4, 4), version);
+
+        int stride = version >= 38 ? 12 : 8;
+        int numEntries = 31;
+
+        int strOffset = 1024;
+        int strSize = 512;
+        byte[] stringHeap = BuildValidStringHeap(strSize);
+        Buffer.BlockCopy(stringHeap, 0, buf, strOffset, strSize);
+
+        for (int i = 0; i < numEntries; i++)
+        {
+            int pos = 8 + i * stride;
+            uint off;
+            int sz;
+
+            if (i == 2 && version < 38)
+            {
+                off = (uint)strOffset;
+                sz = strSize;
+            }
+            else if (i < 24)
+            {
+                off = (uint)(1600 + i * 64);
+                sz = 64;
+            }
+            else
+            {
+                off = 0;
+                sz = 0;
+            }
+
+            BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(pos, 4), off);
+            BinaryPrimitives.WriteInt32LittleEndian(span.Slice(pos + 4, 4), sz);
+            if (stride == 12)
+            {
+                BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(pos + 8, 4), 0);
+            }
+        }
+
+        return buf;
+    }
+
+    [Fact]
+    public void IsEncryptedMetadata_DetectsCorrectly()
+    {
+        byte[] unencrypted = new byte[100];
+        Nep2Decryptor.MagicBytes.CopyTo(unencrypted.AsSpan(0, 4));
+        BinaryPrimitives.WriteInt32LittleEndian(unencrypted.AsSpan(4, 4), 29);
+        Assert.False(MetadataValidator.IsEncryptedMetadata(unencrypted));
+
+        byte[] unencrypted39 = new byte[100];
+        Nep2Decryptor.MagicBytes.CopyTo(unencrypted39.AsSpan(0, 4));
+        BinaryPrimitives.WriteInt32LittleEndian(unencrypted39.AsSpan(4, 4), 39);
+        Assert.False(MetadataValidator.IsEncryptedMetadata(unencrypted39));
+
+        byte[] encryptedNep2 = new byte[100];
+        Nep2Decryptor.MagicBytes.CopyTo(encryptedNep2.AsSpan(0, 4));
+        BinaryPrimitives.WriteInt32LittleEndian(encryptedNep2.AsSpan(4, 4), 65536);
+        Assert.True(MetadataValidator.IsEncryptedMetadata(encryptedNep2));
+
+        byte[] badMagic = new byte[100];
+        Assert.True(MetadataValidator.IsEncryptedMetadata(badMagic));
+    }
+
+    [Fact]
+    public void GetCandidateVersions_MapsCorrectly()
+    {
+        Assert.Equal(39, MetadataValidator.GetCandidateVersions("6000.0.1f1")[0]);
+        Assert.Equal(31, MetadataValidator.GetCandidateVersions("2022.3.8f1")[0]);
+        Assert.Equal(29, MetadataValidator.GetCandidateVersions("2021.3.16f1")[0]);
+        Assert.Equal(27, MetadataValidator.GetCandidateVersions("2020.3.1f1")[0]);
+        Assert.Equal(24, MetadataValidator.GetCandidateVersions("2019.4.20f1")[0]);
+
+        var all = MetadataValidator.GetCandidateVersions(null);
+        foreach (var v in all)
+        {
+            Assert.InRange(v, 16, 39);
+        }
+    }
+
+    [Theory]
+    [InlineData(20)]
+    [InlineData(24)]
+    [InlineData(27)]
+    [InlineData(29)]
+    [InlineData(31)]
+    [InlineData(35)]
+    [InlineData(38)]
+    [InlineData(39)]
+    public void ValidateMetadata_Passes_AcrossVersions(int version)
+    {
+        byte[] mockMeta = BuildMockMetadataFile(version);
+        var (valid, reason) = MetadataValidator.ValidateMetadata(mockMeta, version);
+        Assert.True(valid, $"Validation failed for v{version}: {reason}");
+    }
+
+    [Fact]
+    public void GameDiscovery_DiscoversValidGameStructure()
+    {
+        string tmpDir = Path.Combine(Path.GetTempPath(), "md_disco_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tmpDir);
+            string exePath = Path.Combine(tmpDir, "SampleGame.exe");
+            File.WriteAllBytes(exePath, [0x4D, 0x5A]); // MZ
+
+            string binPath = Path.Combine(tmpDir, "GameAssembly.dll");
+            File.WriteAllBytes(binPath, [0x4D, 0x5A]);
+
+            string dataDir = Path.Combine(tmpDir, "SampleGame_Data");
+            string metaDir = Path.Combine(dataDir, "il2cpp_data", "Metadata");
+            Directory.CreateDirectory(metaDir);
+
+            string metaPath = Path.Combine(metaDir, "global-metadata.dat");
+            File.WriteAllBytes(metaPath, BuildMockMetadataFile(29));
+
+            File.WriteAllText(Path.Combine(dataDir, "app.info"), "2021.3.16f1");
+
+            // 1. Point to .exe
+            var game1 = GameDiscovery.DiscoverGame(exePath);
+            Assert.Equal("SampleGame", game1.GameName);
+            Assert.Equal(binPath, game1.BinaryPath);
+            Assert.Equal(metaPath, game1.MetadataPath);
+            Assert.Equal("2021.3.16f1", game1.UnityVersion);
+
+            // 2. Point to game root
+            var game2 = GameDiscovery.DiscoverGame(tmpDir);
+            Assert.Equal(binPath, game2.BinaryPath);
+
+            // 3. Point to _Data
+            var game3 = GameDiscovery.DiscoverGame(dataDir);
+            Assert.Equal("SampleGame", game3.GameName);
+        }
+        finally
+        {
+            try { Directory.Delete(tmpDir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void GameDiscovery_DetectsMonoGame_ThrowsNotIl2Cpp()
+    {
+        string tmpDir = Path.Combine(Path.GetTempPath(), "md_mono_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tmpDir);
+            string dataDir = Path.Combine(tmpDir, "MonoGame_Data");
+            string managedDir = Path.Combine(dataDir, "Managed");
+            Directory.CreateDirectory(managedDir);
+            File.WriteAllBytes(Path.Combine(managedDir, "Assembly-CSharp.dll"), [0x4D, 0x5A]);
+
+            Assert.Throws<NotIl2CppGameException>(() => GameDiscovery.DiscoverGame(tmpDir));
+        }
+        finally
+        {
+            try { Directory.Delete(tmpDir, true); } catch { }
+        }
+    }
+}
