@@ -92,6 +92,17 @@ jobs:
             ForEach-Object { "$((Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } |
             Out-File -FilePath publish/SHA256SUMS.txt -Encoding utf8NoBOM
 
+      - name: Reset Previous Rolling Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $existing = gh release view latest --json id 2>$null
+          if ($LASTEXITCODE -eq 0 -and $existing) {
+            Write-Host "Purging previous rolling release and stale assets..."
+            gh release delete latest --yes --cleanup-tag
+          }
+
       - name: Create or Update Rolling Latest Release
         uses: softprops/action-gh-release@v2
         with:
