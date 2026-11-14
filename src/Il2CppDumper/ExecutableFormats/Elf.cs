@@ -23,8 +23,9 @@ namespace Il2CppDumper
         private static readonly string ARMFeatureBytes = "? 0x10 ? 0xE7 ? 0x00 ? 0xE0 ? 0x20 ? 0xE0";
         private static readonly string X86FeatureBytes = "? 0x10 ? 0xE7 ? 0x00 ? 0xE0 ? 0x20 ? 0xE0"; //TODO
 
-        public Elf(Stream stream) : base(stream)
+        public Elf(Stream stream, bool isSElfContainer = false) : base(stream)
         {
+            IsSElfContainer = isSElfContainer;
             Is32Bit = true;
             Load();
         }
@@ -47,7 +48,7 @@ namespace Il2CppDumper
             if (!IsDumped)
             {
                 RelocationProcessing();
-                if (CheckProtection())
+                if (!IsSElfContainer && CheckProtection())
                 {
                     Console.WriteLine("ERROR: This file may be protected.");
                 }
@@ -242,7 +243,6 @@ namespace Il2CppDumper
 
         private void RelocationProcessing()
         {
-            Console.WriteLine("Applying relocations...");
             try
             {
                 var reldynOffset = MapVATR(dynamicSection.First(x => x.d_tag == DT_REL).d_un);
@@ -290,8 +290,8 @@ namespace Il2CppDumper
                     switch (name)
                     {
                         case "JNI_OnLoad":
-                            Console.WriteLine("WARNING: find JNI_OnLoad");
-                            return true;
+                            Console.WriteLine("[*] Info: Native library exports JNI_OnLoad (plugin/wrapper initialization)");
+                            return false;
                     }
                 }
                 if (sectionTable != null && sectionTable.Any(x => x.sh_type == SHT_LOUSER))

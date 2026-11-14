@@ -3,7 +3,37 @@
     public static class HeaderConstants
     {
         public readonly static string GenericHeader =
-@"typedef void(*Il2CppMethodPointer)();
+@"#if defined(_IDACLANG_) || defined(_BINARYNINJA_)
+#define IS_LIBCLANG_DECOMPILER
+#endif
+
+#if defined(_GHIDRA_) || defined(_IDA_) || defined(IS_LIBCLANG_DECOMPILER)
+#define IS_DECOMPILER
+#endif
+
+#if defined(_GHIDRA_) || defined(_IDA_)
+typedef unsigned __int8 uint8_t;
+typedef unsigned __int16 uint16_t;
+typedef unsigned __int32 uint32_t;
+typedef unsigned __int64 uint64_t;
+typedef __int8 int8_t;
+typedef __int16 int16_t;
+typedef __int32 int32_t;
+typedef __int64 int64_t;
+#endif
+
+#if defined(IS_LIBCLANG_DECOMPILER)
+typedef unsigned char uint8_t;
+typedef unsigned short uint16_t;
+typedef unsigned int uint32_t;
+typedef unsigned long uint64_t;
+typedef signed char int8_t;
+typedef short int16_t;
+typedef int int32_t;
+typedef long int64_t;
+#endif
+
+typedef void(*Il2CppMethodPointer)();
 
 struct MethodInfo;
 

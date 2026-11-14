@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using ZstdSharp;
 using static Il2CppDumper.ElfConstants;
 
 namespace Il2CppDumper
@@ -12,6 +13,7 @@ namespace Il2CppDumper
         private readonly bool isTextCompressed;
         private readonly bool isRoDataCompressed;
         private readonly bool isDataCompressed;
+        private readonly bool isZbicCompressed;
         private readonly List<NSOSegmentHeader> segments = new();
         private Elf64_Sym[] symbolTable;
         private readonly List<Elf64_Dyn> dynamicSection = new();
@@ -30,6 +32,7 @@ namespace Il2CppDumper
             isTextCompressed = (header.Flags & 1) != 0;
             isRoDataCompressed = (header.Flags & 2) != 0;
             isDataCompressed = (header.Flags & 4) != 0;
+            isZbicCompressed = (header.Flags & 0x80) != 0; // SegmentFlags.ZbicCompression
             header.TextSegment = new NSOSegmentHeader
             {
                 FileOffset = ReadUInt32(),
@@ -166,7 +169,6 @@ namespace Il2CppDumper
 
         private void RelocationProcessing()
         {
-            Console.WriteLine("Applying relocations...");
             try
             {
                 var relaOffset = MapVATR(dynamicSection.First(x => x.d_tag == DT_RELA).d_un);
@@ -276,12 +278,7 @@ namespace Il2CppDumper
                 var textBytes = ReadBytes((int)header.TextCompressedSize);
                 if (isTextCompressed)
                 {
-                    var unCompressedData = new byte[header.TextSegment.DecompressedSize];
-                    using (var decoder = new Lz4DecoderStream(new MemoryStream(textBytes)))
-                    {
-                        decoder.ReadExactly(unCompressedData, 0, unCompressedData.Length);
-                    }
-                    writer.Write(unCompressedData);
+                    writer.Write(DecompressSegment(textBytes, (int)header.TextSegment.DecompressedSize, isZbicCompressed));
                 }
                 else
                 {
@@ -290,12 +287,7 @@ namespace Il2CppDumper
                 var roDataBytes = ReadBytes((int)header.RoDataCompressedSize);
                 if (isRoDataCompressed)
                 {
-                    var unCompressedData = new byte[header.RoDataSegment.DecompressedSize];
-                    using (var decoder = new Lz4DecoderStream(new MemoryStream(roDataBytes)))
-                    {
-                        decoder.ReadExactly(unCompressedData, 0, unCompressedData.Length);
-                    }
-                    writer.Write(unCompressedData);
+                    writer.Write(DecompressSegment(roDataBytes, (int)header.RoDataSegment.DecompressedSize, isZbicCompressed));
                 }
                 else
                 {
@@ -304,12 +296,7 @@ namespace Il2CppDumper
                 var dataBytes = ReadBytes((int)header.DataCompressedSize);
                 if (isDataCompressed)
                 {
-                    var unCompressedData = new byte[header.DataSegment.DecompressedSize];
-                    using (var decoder = new Lz4DecoderStream(new MemoryStream(dataBytes)))
-                    {
-                        decoder.ReadExactly(unCompressedData, 0, unCompressedData.Length);
-                    }
-                    writer.Write(unCompressedData);
+                    writer.Write(DecompressSegment(dataBytes, (int)header.DataSegment.DecompressedSize, isZbicCompressed));
                 }
                 else
                 {
@@ -320,6 +307,26 @@ namespace Il2CppDumper
                 return new NSO(unCompressedStream);
             }
             return this;
+        }
+
+        private static byte[] DecompressSegment(byte[] compressedData, int decompressedSize, bool isZbic)
+        {
+            var unCompressedData = new byte[decompressedSize];
+            if (isZbic)
+            {
+                using var decompressor = new Decompressor();
+                int decompressed = decompressor.Unwrap(compressedData.AsSpan(), unCompressedData.AsSpan());
+                if (decompressed != decompressedSize)
+                {
+                    throw new InvalidDataException($"ZBIC decompression mismatch: expected {decompressedSize} bytes, got {decompressed} bytes");
+                }
+            }
+            else
+            {
+                using var decoder = new Lz4DecoderStream(new MemoryStream(compressedData));
+                decoder.ReadExactly(unCompressedData, 0, unCompressedData.Length);
+            }
+            return unCompressedData;
         }
 
         public override SectionHelper GetSectionHelper(int methodCount, int typeDefinitionsCount, int imageCount)

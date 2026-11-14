@@ -1,0 +1,4 @@
+contact_links:
+  - name: Documentation & Technical Manual
+    url: https://github.com/Primer0x41/Il2CppDumperEx/blob/main/USAGE_GUIDE.md
+    about: Read usage instructions, platform guides, and CLI options before opening an issue.

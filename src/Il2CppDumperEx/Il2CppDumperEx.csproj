@@ -1,23 +1,45 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFrameworks>net11.0;net11.0-windows</TargetFrameworks>
+    <Version>1.0.0</Version>
+    <Authors>Primer0x41</Authors>
+    <Company>Primer0x41</Company>
+    <Copyright>Copyright © Primer0x41 2026</Copyright>
+    <Product>Il2CppDumperEx</Product>
+    <Description>Extended Unity IL2CPP Reverse Engineering Suite</Description>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <SatelliteResourceLanguages>none</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- Windows desktop specific settings -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net11.0-windows'">
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\Icon.ico</ApplicationIcon>
   </PropertyGroup>
 
-  <ItemGroup>
+  <!-- Cross-platform CLI specific settings -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0-windows'">
     <Resource Include="Assets\Icon.ico" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+
+  <!-- Exclude WPF UI views/controls from cross-platform CLI compilation -->
+  <ItemGroup Condition="'$(TargetFramework)' != 'net11.0-windows'">
+    <Compile Remove="UI\**\*" />
+    <None Include="UI\**\*" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Il2CppDumper\Il2CppDumper.csproj" />
-    <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <InternalsVisibleTo Include="Il2CppDumperEx.Tests" />
   </ItemGroup>
 
 </Project>

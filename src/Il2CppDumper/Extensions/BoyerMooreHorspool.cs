@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Il2CppDumper
 {
-    static class BoyerMooreHorspool
+    public static class BoyerMooreHorspool
     {
         public static IEnumerable<int> Search(this byte[] source, byte[] pattern)
         {
@@ -78,6 +78,12 @@ namespace Il2CppDumper
                 yield break;
             }
 
+            var parsedPattern = new short[patternLength];
+            for (int p = 0; p < patternLength; p++)
+            {
+                parsedPattern[p] = pattern[p] == "?" ? (short)-1 : Convert.ToInt16(pattern[p], 16);
+            }
+
             var badCharacters = new int[256];
 
             for (var i = 0; i < 256; i++)
@@ -89,10 +95,9 @@ namespace Il2CppDumper
 
             for (int i = 0; i < lastPatternByte; i++)
             {
-                if (pattern[i] != "?")
+                if (parsedPattern[i] != -1)
                 {
-                    var result = Convert.ToInt32(pattern[i], 16);
-                    badCharacters[result] = lastPatternByte - i;
+                    badCharacters[parsedPattern[i]] = lastPatternByte - i;
                 }
             }
 
@@ -100,7 +105,7 @@ namespace Il2CppDumper
 
             while (index <= valueLength - patternLength)
             {
-                for (var i = lastPatternByte; CheckEqual(source, pattern, index, i); i--)
+                for (var i = lastPatternByte; CheckEqual(source, parsedPattern, index, i); i--)
                 {
                     if (i == 0)
                     {
@@ -113,14 +118,9 @@ namespace Il2CppDumper
             }
         }
 
-        private static bool CheckEqual(byte[] source, string[] pattern, int index, int i)
+        private static bool CheckEqual(byte[] source, short[] pattern, int index, int i)
         {
-            if (pattern[i] != "?")
-            {
-                var result = Convert.ToInt32(pattern[i], 16);
-                return source[index + i] == result;
-            }
-            return true;
+            return pattern[i] == -1 || source[index + i] == (byte)pattern[i];
         }
     }
 }

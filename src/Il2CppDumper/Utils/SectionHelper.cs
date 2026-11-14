@@ -201,9 +201,10 @@ namespace Il2CppDumper
             {
                 return 0;
             }
-            if (il2Cpp.Version >= 27)
+            if (il2Cpp.Version >= 21)
             {
-                return FindMetadataRegistrationV21();
+                var mr = FindMetadataRegistrationV21();
+                if (mr != 0) return mr;
             }
             return FindMetadataRegistrationOld();
         }

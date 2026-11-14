@@ -65,7 +65,11 @@ public partial class MainWindow : FluentWindow
     private string? _detectedUnityVersion;
     private string? _detectedMetadataVersion;
 
-    public MainWindow()
+    public MainWindow() : this(null)
+    {
+    }
+
+    public MainWindow(string? initialPath)
     {
         InitializeComponent();
         ApplicationThemeManager.Apply(this);
@@ -88,6 +92,11 @@ public partial class MainWindow : FluentWindow
         };
 
         SetStateReady();
+
+        if (!string.IsNullOrWhiteSpace(initialPath))
+        {
+            SetGamePath(initialPath);
+        }
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -275,15 +284,7 @@ public partial class MainWindow : FluentWindow
         TxtGamePath.Text = path;
         try
         {
-            string gameName = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            if (gameName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-            {
-                gameName = Path.GetFileNameWithoutExtension(gameName);
-            }
-            if (!string.IsNullOrEmpty(gameName))
-            {
-                TxtOutputDir.Text = Path.Combine(Directory.GetCurrentDirectory(), "output", gameName);
-            }
+            TxtOutputDir.Text = Path.GetFullPath("output");
         }
         catch
         {
@@ -355,6 +356,7 @@ public partial class MainWindow : FluentWindow
 
         var dumperConfig = new Config
         {
+            DumpCs = ChkDumpCs.IsChecked == true,
             GenerateDummyDll = ChkDummyDll.IsChecked == true,
             GenerateStruct = ChkStruct.IsChecked == true,
             DumpMethod = ChkDumpMethod.IsChecked == true,
@@ -367,10 +369,18 @@ public partial class MainWindow : FluentWindow
             DummyDllAddToken = true,
             RequireAnyKey = false,
             ForceDump = false,
-            NoRedirectedPointer = false
+            NoRedirectedPointer = false,
+            GenerateUnifiedJson = ChkUnifiedJson.IsChecked == true,
+            SplitMode = CmbSplitMode.SelectedIndex switch
+            {
+                1 => DecompileSplitMode.Assembly,
+                2 => DecompileSplitMode.Namespace,
+                _ => DecompileSplitMode.None
+            }
         };
 
         BtnStart.IsEnabled = false;
+        BtnDecryptOnly.IsEnabled = false;
         BtnCancel.IsEnabled = true;
         BtnOpenOutput.Visibility = Visibility.Collapsed;
         SetStateRunning();
@@ -436,7 +446,6 @@ public partial class MainWindow : FluentWindow
         {
             Dispatcher.InvokeAsync(() =>
             {
-                // Detect versions from log stream for status bar display
                 if (msg.Contains("[*] Unity Version: ", StringComparison.Ordinal))
                 {
                     _detectedUnityVersion = msg.Substring(msg.IndexOf("[*] Unity Version: ") + 19).Trim();
@@ -450,7 +459,6 @@ public partial class MainWindow : FluentWindow
                     UpdateVersionsDisplay();
                 }
 
-                // Tokenize color for read-only log view: neutral for normal lines, color only for key outcomes
                 Brush brush = BrushInfo;
                 if (msg.StartsWith("[x]", StringComparison.OrdinalIgnoreCase) || msg.Contains("ERROR", StringComparison.OrdinalIgnoreCase) || msg.Contains("Exception", StringComparison.OrdinalIgnoreCase))
                 {
@@ -473,7 +481,6 @@ public partial class MainWindow : FluentWindow
                     brush = BrushInfo;
                 }
 
-                // Check if user is scrolled to bottom before adding
                 bool autoScroll = _logScrollViewer == null || _logScrollViewer.VerticalOffset >= _logScrollViewer.ScrollableHeight - 16;
 
                 if (_logEntries.Count >= 2500)
@@ -516,6 +523,7 @@ public partial class MainWindow : FluentWindow
             PrgBar.Foreground = BrushPrgGreen;
 
             _lastOutputDir = result.OutputDir;
+            TxtOutputDir.Text = result.OutputDir;
             BtnOpenOutput.Visibility = Visibility.Visible;
 
             if (!string.IsNullOrEmpty(result.UnityVersion))
@@ -553,9 +561,117 @@ public partial class MainWindow : FluentWindow
         finally
         {
             BtnStart.IsEnabled = true;
+            BtnDecryptOnly.IsEnabled = true;
             BtnCancel.IsEnabled = false;
             _cts?.Dispose();
             _cts = null;
+        }
+    }
+
+    private async void BtnDecryptOnly_Click(object sender, RoutedEventArgs e)
+    {
+        string? targetPath = TxtGamePath.Text?.Trim();
+        if (string.IsNullOrEmpty(targetPath) || (!Directory.Exists(targetPath) && !File.Exists(targetPath)))
+        {
+            System.Windows.MessageBox.Show(this, "Please select a valid game folder or global-metadata.dat file first.", "Selection Needed", System.Windows.MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        string metadataFile;
+        if (File.Exists(targetPath) && (targetPath.EndsWith(".dat", StringComparison.OrdinalIgnoreCase) || targetPath.EndsWith(".dec", StringComparison.OrdinalIgnoreCase)))
+        {
+            metadataFile = targetPath;
+        }
+        else
+        {
+            try
+            {
+                var discovered = await Task.Run(() => GameDiscovery.DiscoverGame(targetPath));
+                metadataFile = discovered.MetadataPath;
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(this, $"Could not locate global-metadata.dat: {ex.Message}", "Metadata Not Found", System.Windows.MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+        }
+
+        var saveDlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Save Decrypted Metadata",
+            Filter = "Metadata File (*.dat)|*.dat|All Files (*.*)|*.*",
+            FileName = "global-metadata-decrypted.dat",
+            InitialDirectory = Path.GetDirectoryName(metadataFile)
+        };
+
+        if (saveDlg.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        string outputPath = saveDlg.FileName;
+        int? forceVersion = (CmbForceVersion.SelectedItem as VersionItem)?.Version;
+
+        _logEntries.Clear();
+        BtnStart.IsEnabled = false;
+        BtnDecryptOnly.IsEnabled = false;
+        BtnCancel.IsEnabled = false;
+        SetStateRunning();
+
+        LblStepNumber.Text = "Decrypting";
+        LblStepDetails.Text = "Decrypting & verifying metadata...";
+        PrgRing.Visibility = Visibility.Visible;
+        PrgBar.IsIndeterminate = true;
+        PrgBar.Foreground = BrushPrgBlue;
+
+        void Log(string msg)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                Brush brush = BrushInfo;
+                if (msg.StartsWith("[x]", StringComparison.OrdinalIgnoreCase) || msg.Contains("ERROR", StringComparison.OrdinalIgnoreCase))
+                    brush = BrushError;
+                else if (msg.StartsWith("[+]", StringComparison.OrdinalIgnoreCase))
+                    brush = BrushSuccess;
+                else if (msg.StartsWith("[*]", StringComparison.OrdinalIgnoreCase))
+                    brush = BrushNotice;
+
+                if (_logEntries.Count >= 2500) _logEntries.RemoveAt(0);
+                _logEntries.Add(new LogEntry(msg, brush));
+                _logScrollViewer?.ScrollToBottom();
+            });
+        }
+
+        try
+        {
+            var res = await Task.Run(() => DumpPipeline.DecryptMetadataFile(metadataFile, outputPath, forceVersion, Log));
+            SetStateDone();
+            LblStepNumber.Text = "Finished";
+            LblStepDetails.Text = $"Decrypted metadata saved (v{res.ValidatedVersion})";
+            PrgBar.IsIndeterminate = false;
+            PrgBar.Value = 100;
+            PrgBar.Foreground = BrushPrgGreen;
+            PrgRing.Visibility = Visibility.Collapsed;
+
+            _lastOutputDir = Path.GetDirectoryName(outputPath);
+            BtnOpenOutput.Visibility = Visibility.Visible;
+            System.Windows.MessageBox.Show(this, $"Metadata successfully decrypted and verified!\n\nVersion: v{res.ValidatedVersion}\nPath: {outputPath}", "Decryption Successful", System.Windows.MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            SetStateError();
+            LblStepNumber.Text = "Error";
+            LblStepDetails.Text = ex.Message;
+            PrgBar.IsIndeterminate = false;
+            PrgBar.Foreground = BrushPrgRed;
+            PrgRing.Visibility = Visibility.Collapsed;
+            Log($"[x] Decryption Error: {ex.Message}");
+            System.Windows.MessageBox.Show(this, $"Decryption failed:\n\n{ex.Message}", "Decryption Failed", System.Windows.MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            BtnStart.IsEnabled = true;
+            BtnDecryptOnly.IsEnabled = true;
         }
     }
 

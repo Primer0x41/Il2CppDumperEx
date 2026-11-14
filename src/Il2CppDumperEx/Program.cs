@@ -3,14 +3,26 @@ using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using Il2CppDumper;
 using Il2CppDumperEx.Core;
+#if WINDOWS
 using Il2CppDumperEx.UI;
+#endif
 
 namespace Il2CppDumperEx;
 
 internal static class Program
 {
+#if WINDOWS
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AttachConsole(int dwProcessId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool AllocConsole();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool FreeConsole();
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetConsoleWindow();
 
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     private static extern IntPtr CreateFile(
@@ -29,74 +41,115 @@ internal static class Program
     private const uint FileShareWrite = 0x00000002;
     private const uint OpenExisting = 3;
 
+    private static bool _allocatedOwnConsole = false;
+#endif
+
     [STAThread]
     private static int Main(string[] args)
     {
+#if WINDOWS
+        if (args.Length > 0 && args[0].Equals("--gui", StringComparison.OrdinalIgnoreCase))
+        {
+            string? initialPath = args.Length > 1 ? args[1] : null;
+            var app = new App();
+            app.InitializeComponent();
+            return app.Run(new MainWindow(initialPath));
+        }
+
         if (args.Length > 0)
         {
             SetupCliConsole();
-            return RunCli(args);
+            int exitCode = RunCli(args);
+            if (_allocatedOwnConsole)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Press any key to exit...");
+                try { Console.ReadKey(true); } catch { }
+            }
+            return exitCode;
         }
 
-        var app = new App();
-        app.InitializeComponent();
-        return app.Run(new MainWindow());
+        var appGui = new App();
+        appGui.InitializeComponent();
+        return appGui.Run(new MainWindow());
+#else
+        if (args.Length > 0 && args[0].Equals("--gui", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine("Error: GUI mode is only supported on Windows (WPF). CLI mode is fully supported on Linux and macOS.");
+            return 1;
+        }
+
+        if (args.Length == 0)
+        {
+            PrintHelp();
+            return 0;
+        }
+
+        return RunCli(args);
+#endif
     }
 
+#if WINDOWS
     private static void SetupCliConsole()
     {
-        if (Console.IsOutputRedirected)
+        if (Console.IsOutputRedirected && Console.OpenStandardOutput() != Stream.Null)
         {
             var stdOut = Console.OpenStandardOutput();
-            if (stdOut != Stream.Null)
-            {
-                Console.SetOut(new StreamWriter(stdOut, Console.OutputEncoding) { AutoFlush = true });
-            }
-        }
-        else if (AttachConsole(AttachParentProcess))
-        {
-            try
-            {
-                var hConOut = CreateFile("CONOUT$", GenericWrite, FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
-                if (hConOut != IntPtr.Zero && hConOut != new IntPtr(-1))
-                {
-                    var safeOut = new SafeFileHandle(hConOut, ownsHandle: true);
-                    var fsOut = new FileStream(safeOut, FileAccess.Write);
-                    Console.SetOut(new StreamWriter(fsOut, Console.OutputEncoding) { AutoFlush = true });
-                }
-            }
-            catch { }
-        }
+            Console.SetOut(new StreamWriter(stdOut, Console.OutputEncoding) { AutoFlush = true });
 
-        if (Console.IsErrorRedirected)
-        {
-            var stdErr = Console.OpenStandardError();
-            if (stdErr != Stream.Null)
+            if (Console.IsErrorRedirected && Console.OpenStandardError() != Stream.Null)
             {
+                var stdErr = Console.OpenStandardError();
                 Console.SetError(new StreamWriter(stdErr, Console.OutputEncoding) { AutoFlush = true });
             }
+            return;
         }
-        else
+
+        if (AttachConsole(AttachParentProcess))
         {
-            try
-            {
-                var hConErr = CreateFile("CONOUT$", GenericWrite, FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
-                if (hConErr != IntPtr.Zero && hConErr != new IntPtr(-1))
-                {
-                    var safeErr = new SafeFileHandle(hConErr, ownsHandle: true);
-                    var fsErr = new FileStream(safeErr, FileAccess.Write);
-                    Console.SetError(new StreamWriter(fsErr, Console.OutputEncoding) { AutoFlush = true });
-                }
-            }
-            catch { }
+            RedirectConsoleStreams();
+            return;
+        }
+
+        FreeConsole();
+        if (AllocConsole())
+        {
+            _allocatedOwnConsole = true;
+            RedirectConsoleStreams();
         }
     }
 
-    private static int RunCli(string[] args)
+    private static void RedirectConsoleStreams()
+    {
+        try
+        {
+            var hConOut = CreateFile("CONOUT$", GenericWrite, FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+            if (hConOut != IntPtr.Zero && hConOut != new IntPtr(-1))
+            {
+                var safeOut = new SafeFileHandle(hConOut, ownsHandle: true);
+                var fsOut = new FileStream(safeOut, FileAccess.Write);
+                Console.SetOut(new StreamWriter(fsOut, Console.OutputEncoding) { AutoFlush = true });
+            }
+
+            var hConIn = CreateFile("CONIN$", GenericRead, FileShareRead, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+            if (hConIn != IntPtr.Zero && hConIn != new IntPtr(-1))
+            {
+                var safeIn = new SafeFileHandle(hConIn, ownsHandle: true);
+                var fsIn = new FileStream(safeIn, FileAccess.Read);
+                Console.SetIn(new StreamReader(fsIn, Console.InputEncoding));
+            }
+        }
+        catch { }
+    }
+#endif
+
+    internal static int RunCli(string[] args)
     {
         string? gamePath = null;
         string? outDir = null;
         int? forceVersion = null;
+        string? decryptOutPath = null;
+        bool decryptOnly = false;
         bool verbose = false;
 
         var dumperConfig = new Config
@@ -125,15 +178,17 @@ internal static class Program
                 return 0;
             }
 
-            if (arg is "--version" or "-V")
-            {
-                Console.WriteLine("Il2CppDumperEx v1.0.0 (Extended Edition with NEP2 Decryption)");
-                return 0;
-            }
-
             if (arg is "-v" or "--verbose")
             {
                 verbose = true;
+            }
+            else if (arg is "--decrypt-only" or "-d")
+            {
+                decryptOnly = true;
+                if (i + 1 < args.Length && !args[i + 1].StartsWith('-'))
+                {
+                    decryptOutPath = args[++i];
+                }
             }
             else if (arg is "--out" && i + 1 < args.Length)
             {
@@ -150,6 +205,10 @@ internal static class Program
                     Console.Error.WriteLine("[!] Invalid argument for --force-version: must be an integer.");
                     return 1;
                 }
+            }
+            else if (arg is "--no-cs")
+            {
+                dumperConfig.DumpCs = false;
             }
             else if (arg is "--no-dummy-dll")
             {
@@ -191,12 +250,19 @@ internal static class Program
             {
                 dumperConfig.DummyDllAddToken = false;
             }
-            else if (arg is "--backend" or "--dumper-repo" or "--dumper-choice" or "--dumper-commit")
+            else if (arg is "--unified-json")
             {
-                i++;
+                dumperConfig.GenerateUnifiedJson = true;
             }
-            else if (arg is "--update-tools" or "--keep-temp")
+            else if (arg is "--split-mode" && i + 1 < args.Length)
             {
+                string modeStr = args[++i].ToLowerInvariant();
+                dumperConfig.SplitMode = modeStr switch
+                {
+                    "assembly" or "asm" => DecompileSplitMode.Assembly,
+                    "namespace" or "ns" => DecompileSplitMode.Namespace,
+                    _ => DecompileSplitMode.None
+                };
             }
             else if (!arg.StartsWith('-') && gamePath == null)
             {
@@ -206,9 +272,68 @@ internal static class Program
 
         if (string.IsNullOrEmpty(gamePath))
         {
-            Console.Error.WriteLine("[!] Error: No game path specified.");
+            Console.Error.WriteLine("[!] Error: No game path or metadata path specified.");
             PrintHelp();
             return 1;
+        }
+
+        if (decryptOnly)
+        {
+            try
+            {
+                string metadataFile;
+                if (File.Exists(gamePath) && (gamePath.EndsWith(".dat", StringComparison.OrdinalIgnoreCase) || gamePath.EndsWith(".dec", StringComparison.OrdinalIgnoreCase)))
+                {
+                    metadataFile = gamePath;
+                }
+                else
+                {
+                    var discovered = GameDiscovery.DiscoverGame(gamePath);
+                    metadataFile = discovered.MetadataPath;
+                }
+
+                string? effectiveOut = !string.IsNullOrEmpty(decryptOutPath) ? decryptOutPath : outDir;
+                string destination = !string.IsNullOrEmpty(effectiveOut)
+                    ? (Directory.Exists(effectiveOut) 
+                        ? Path.Combine(effectiveOut, "global-metadata.dat") 
+                        : effectiveOut)
+                    : (File.Exists(gamePath) 
+                        ? Path.Combine(Path.GetDirectoryName(gamePath) ?? ".", "global-metadata-decrypted.dat")
+                        : Path.Combine(gamePath, "global-metadata-decrypted.dat"));
+
+                Console.WriteLine("==================================================");
+                Console.WriteLine("Il2CppDumperEx - Standalone Metadata Decryption");
+                Console.WriteLine("==================================================");
+
+                var decResult = DumpPipeline.DecryptMetadataFile(
+                    inputPath: metadataFile,
+                    outputPath: destination,
+                    forceVersion: forceVersion,
+                    logCallback: Console.WriteLine
+                );
+
+                Console.WriteLine();
+                Console.WriteLine("==================================================");
+                Console.WriteLine("Decryption & Verification Complete!");
+                Console.WriteLine($"Input:       {decResult.InputPath}");
+                Console.WriteLine($"Output:      {decResult.OutputPath}");
+                Console.WriteLine($"Status:      {(decResult.NeededDecryption ? "NEP2 Decrypted" : "Already Decrypted")}");
+                Console.WriteLine($"Version:     v{decResult.ValidatedVersion}");
+                Console.WriteLine($"Strings:     {decResult.SaneStringCount:N0} valid strings verified in heap");
+                Console.WriteLine($"Duration:    {decResult.DurationSeconds:F4}s");
+                Console.WriteLine("==================================================");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine();
+                Console.Error.WriteLine($"[!] Decryption Error: {ex.Message}");
+                if (verbose)
+                {
+                    Console.Error.WriteLine(ex.StackTrace);
+                }
+                return 1;
+            }
         }
 
         try
@@ -261,19 +386,22 @@ internal static class Program
         Console.WriteLine(@"Il2CppDumperEx - Extended Unity IL2CPP Reverse Engineering Suite
 
 Usage:
-  Il2CppDumperEx <game_path> [options]
+  Il2CppDumperEx <game_path_or_metadata> [options]
 
 Arguments:
-  game_path             Path to game folder, <Game>_Data directory, or .exe
+  game_path             Path to game folder, <Game>_Data directory, .exe, or global-metadata.dat
 
 Options:
+  -d, --decrypt-only [out] Decrypt and verify global-metadata.dat without running decompilation
   --out <dir>           Custom output directory (default: ./output/<GameName>)
   --force-version <N>   Force specific metadata version (e.g. 29, 31)
   -v, --verbose         Print detailed diagnostic output
-  --version             Show tool version
   -h, --help            Show this help message
 
 Dump Options (All enabled by default):
+  --split-mode <mode>   C# dump output mode: none (dump.cs), assembly (by dll), namespace (folder tree)
+  --unified-json        Generate unified metadata.json symbol map for disassemblers
+  --no-cs               Disable C# decompilation (dump.cs / CSharp folder)
   --no-dummy-dll        Disable generation of DummyDll assemblies
   --no-struct           Disable generation of struct definitions (il2cpp.h, script.json, stringliteral.json)
   --no-method           Disable dumping method signatures

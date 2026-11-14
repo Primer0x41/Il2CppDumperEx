@@ -47,7 +47,7 @@ namespace Il2CppDumper
             il2Cpp = il2CppExecutor.il2Cpp;
         }
 
-        public void WriteScript(string outputDir)
+        public ScriptJson GenerateScriptJson()
         {
             var json = new ScriptJson();
             // 生成唯一名称
@@ -375,6 +375,12 @@ namespace Il2CppDumper
                     AddMetadataUsageMethodRef(json, i.Value, il2Cpp.metadataUsages[i.Key]);
                 }
             }
+            return json;
+        }
+
+        public ScriptJson WriteScript(string outputDir, Config config = null)
+        {
+            var json = GenerateScriptJson();
             //输出单独的StringLiteral
             var stringLiterals = json.ScriptString.Select(x => new
             {
@@ -436,12 +442,13 @@ namespace Il2CppDumper
                     break;
                 default:
                     Console.WriteLine($"WARNING: This il2cpp version [{il2Cpp.Version}] does not support generating .h files");
-                    return;
+                    return json;
             }
             sb.Append(headerStruct);
             sb.Append(arrayClassHeader);
             sb.Append(methodInfoHeader);
             File.WriteAllText(Path.Combine(outputDir, "il2cpp.h"), sb.ToString());
+            return json;
         }
 
         private void AddMetadataUsageTypeInfo(ScriptJson json, uint index, ulong address)

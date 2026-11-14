@@ -4,14 +4,20 @@
 param(
     [string]$Configuration = "Release",
     [string]$Runtime = "win-x64",
+    [string]$Framework = "",
     [switch]$SkipTests
 )
 
 $ErrorActionPreference = "Stop"
 
+if ([string]::IsNullOrWhiteSpace($Framework)) {
+    $Framework = if ($Runtime -like "win*") { "net11.0-windows" } else { "net11.0" }
+}
+
 $RootDir = $PSScriptRoot
 $PublishDir = Join-Path $RootDir "publish"
-$ExePath = Join-Path $PublishDir "Il2CppDumperEx.exe"
+$exeName = if ($Runtime -like "win*") { "Il2CppDumperEx.exe" } else { "Il2CppDumperEx" }
+$ExePath = Join-Path $PublishDir $exeName
 
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "       Il2CppDumperEx Build & Packaging          " -ForegroundColor Cyan
@@ -30,13 +36,14 @@ if (-not $SkipTests) {
 }
 
 # 2. Publish Single-File Executable
-Write-Host "[2/2] Publishing clean single-file executable ($Runtime)..." -ForegroundColor Yellow
+Write-Host "[2/2] Publishing clean single-file executable ($Runtime, $Framework)..." -ForegroundColor Yellow
 if (Test-Path $PublishDir) {
     Remove-Item $PublishDir -Recurse -Force
 }
 
 dotnet publish "$RootDir\src\Il2CppDumperEx\Il2CppDumperEx.csproj" `
     -c $Configuration `
+    -f $Framework `
     -r $Runtime `
     --self-contained false `
     -p:PublishSingleFile=true `
@@ -53,10 +60,9 @@ if ($LASTEXITCODE -ne 0) {
 # Clean any lingering pdb or symbol artifacts if any
 Get-ChildItem -Path $PublishDir -Filter "*.pdb" -Recurse | Remove-Item -Force
 
-$exeSize = (Get-Item $ExePath).Length
+$exeSize = if (Test-Path $ExePath) { (Get-Item $ExePath).Length } else { 0 }
 
 Write-Host "==================================================" -ForegroundColor Green
 Write-Host "                BUILD SUCCESSFUL                  " -ForegroundColor Green
 Write-Host "==================================================" -ForegroundColor Green
 Write-Host "Standalone Executable: $ExePath ($([Math]::Round($exeSize / 1KB, 2)) KB)"
-Write-Host "Zero extra loose files, zero language folders, zero %TEMP% extraction."

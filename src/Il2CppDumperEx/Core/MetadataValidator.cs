@@ -7,13 +7,24 @@ namespace Il2CppDumperEx.Core;
 public static class MetadataValidator
 {
     public const int MinSaneVersion = 16;
-    public const int MaxSaneVersion = 39;
+    public const int MaxSaneVersion = 110;
+
+    public static bool IsValidMetadataVersion(long version) =>
+        (version >= 16 && version <= 39) || (version >= 104 && version <= 110);
+
+    public static int GetHeaderEntryCount(int version)
+    {
+        if (version >= 110) return 43;
+        if (version >= 108) return 41;
+        if (version >= 104) return 32;
+        return 31;
+    }
 
     private static readonly Regex IdentifierWordRegex = new(@"[A-Za-z0-9_.`]{3,}\0", RegexOptions.Compiled);
 
     public static readonly (string Prefix, int Version)[] UnityToMetadataMap =
     [
-        ("6000.", 39),   // Unity 6
+        ("6000.", 110),  // Unity 6 modern
         ("2023.3", 35),
         ("2023.2", 33),
         ("2023.1", 31),
@@ -38,11 +49,16 @@ public static class MetadataValidator
         ("5.3", 20)
     ];
 
-    public static readonly int[] DefaultCandidateVersions = [31, 29, 27, 24, 39, 38, 35, 33, 23, 22, 21, 20];
+    public static readonly int[] DefaultCandidateVersions = [31, 29, 27, 24, 110, 108, 106, 105, 104, 39, 38, 35, 33, 23, 22, 21, 20];
 
     public static readonly (int Version, string Label)[] SupportedVersionEntries =
     [
-        (39, "Version 39 (Unity 6 / 6000.x)"),
+        (110, "Version 110 (Unity 6 / 6000.x)"),
+        (108, "Version 108 (Unity 6)"),
+        (106, "Version 106 (Unity 6)"),
+        (105, "Version 105 (Unity 6)"),
+        (104, "Version 104 (Unity 6)"),
+        (39, "Version 39 (Unity 6 / 6000.x early)"),
         (38, "Version 38 (Unity 6 experimental)"),
         (35, "Version 35 (Unity 2023.3)"),
         (33, "Version 33 (Unity 2023.2)"),
@@ -77,7 +93,7 @@ public static class MetadataValidator
         if (!header.Slice(0, 4).SequenceEqual(Nep2Decryptor.MagicBytes)) return true;
 
         uint version = BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(4, 4));
-        if (version >= MinSaneVersion && version <= MaxSaneVersion)
+        if (IsValidMetadataVersion(version))
         {
             return false; // Valid unencrypted
         }
@@ -85,16 +101,26 @@ public static class MetadataValidator
         return true;
     }
 
-    public static List<int> GetCandidateVersions(string? unityVersion)
+    public static List<int> GetCandidateVersions(string? unityVersion, int? existingHeaderVersion = null)
     {
         List<int> candidates = [];
+
+        if (existingHeaderVersion.HasValue &&
+            IsValidMetadataVersion(existingHeaderVersion.Value))
+        {
+            candidates.Add(existingHeaderVersion.Value);
+        }
+
         if (!string.IsNullOrEmpty(unityVersion))
         {
             foreach (var (prefix, metaVer) in UnityToMetadataMap)
             {
                 if (unityVersion.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                 {
-                    candidates.Add(metaVer);
+                    if (!candidates.Contains(metaVer))
+                    {
+                        candidates.Add(metaVer);
+                    }
                     break;
                 }
             }
@@ -102,7 +128,7 @@ public static class MetadataValidator
 
         foreach (var ver in DefaultCandidateVersions)
         {
-            if (!candidates.Contains(ver) && ver >= MinSaneVersion && ver <= MaxSaneVersion)
+            if (!candidates.Contains(ver) && IsValidMetadataVersion(ver))
             {
                 candidates.Add(ver);
             }
@@ -110,7 +136,7 @@ public static class MetadataValidator
 
         for (int ver = MaxSaneVersion; ver >= MinSaneVersion; ver--)
         {
-            if (!candidates.Contains(ver))
+            if (!candidates.Contains(ver) && IsValidMetadataVersion(ver))
             {
                 candidates.Add(ver);
             }
@@ -125,7 +151,8 @@ public static class MetadataValidator
         long fileLen)
     {
         int entryStride = version >= 38 ? 12 : 8;
-        int requiredHeaderLen = 8 + 31 * entryStride;
+        int numEntries = GetHeaderEntryCount(version);
+        int requiredHeaderLen = 8 + numEntries * entryStride;
         if (data.Length < requiredHeaderLen)
         {
             return (false, $"Header data too short ({data.Length} < {requiredHeaderLen} bytes)", []);
@@ -136,12 +163,12 @@ public static class MetadataValidator
             return (false, $"Invalid magic: {Convert.ToHexString(data.Slice(0, 4))}", []);
         }
 
-        List<(uint Offset, int Size)> entries = new(31);
+        List<(uint Offset, int Size)> entries = new(numEntries);
         int acceptableCount = 0;
         int nonEmptyCount = 0;
         long largestSectionEnd = 0;
 
-        for (int i = 0; i < 31; i++)
+        for (int i = 0; i < numEntries; i++)
         {
             int pos = 8 + i * entryStride;
             uint offset = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(pos, 4));
@@ -167,8 +194,8 @@ public static class MetadataValidator
             }
         }
 
-        int minAcceptable = version >= 38 ? 22 : 14;
-        int minNonEmpty = version >= 38 ? 16 : 8;
+        int minAcceptable = version >= 38 ? (int)(numEntries * 0.70) : 14;
+        int minNonEmpty = version >= 38 ? (int)(numEntries * 0.50) : 8;
 
         if (acceptableCount < minAcceptable)
         {
@@ -237,7 +264,7 @@ public static class MetadataValidator
         if (metadataBytes.Length < 256)
             return (false, $"Metadata size too small ({metadataBytes.Length} bytes)");
 
-        var (validHeader, headerMsg, entries) = CheckMetadataHeader(metadataBytes.AsSpan(0, Math.Min(512, metadataBytes.Length)), candidateVersion, metadataBytes.Length);
+        var (validHeader, headerMsg, entries) = CheckMetadataHeader(metadataBytes.AsSpan(0, Math.Min(1024, metadataBytes.Length)), candidateVersion, metadataBytes.Length);
         if (!validHeader)
         {
             return (false, headerMsg);

@@ -5,13 +5,18 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      custom_notes:
+        description: 'Optional custom release notes'
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   build-and-release:
-    name: Build & Release (win-x64)
+    name: Build & Package Release
     runs-on: windows-latest
 
     steps:
@@ -20,46 +25,106 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup .NET 9
+      - name: Setup .NET 11 SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '11.0.x'
 
       - name: Run Test Suite
         run: dotnet test Il2CppDumperEx.sln -c Release --nologo
 
-      - name: Publish Single-File Executable
-        run: |
-          dotnet publish src/Il2CppDumperEx/Il2CppDumperEx.csproj `
-            -c Release `
-            -r win-x64 `
-            --self-contained false `
-            -p:PublishSingleFile=true `
-            -p:DebugType=none `
-            -p:DebugSymbols=false `
-            -o publish `
-            --nologo
-
-      - name: Generate Checksum
+      - name: Publish Windows Binaries (GUI + CLI)
         shell: pwsh
         run: |
-          $hash = (Get-FileHash -Path publish/Il2CppDumperEx.exe -Algorithm SHA256).Hash.ToLower()
-          "$hash  Il2CppDumperEx.exe" | Out-File -FilePath publish/Il2CppDumperEx.exe.sha256 -Encoding utf8NoBOM
+          $targets = @("win-x64", "win-arm64")
+          foreach ($rid in $targets) {
+            $outDir = "publish/$rid"
+            dotnet publish src/Il2CppDumperEx/Il2CppDumperEx.csproj `
+              -c Release `
+              -f net11.0-windows `
+              -r $rid `
+              --self-contained false `
+              -p:PublishSingleFile=true `
+              -p:DebugType=none `
+              -p:DebugSymbols=false `
+              -o $outDir `
+              --nologo
+            
+            Get-ChildItem -Path $outDir -Filter "*.pdb" -Recurse | Remove-Item -Force
+            Compress-Archive -Path "$outDir/*" -DestinationPath "publish/Il2CppDumperEx-$rid.zip" -Force
+            Remove-Item -Recurse -Force $outDir
+          }
 
-      - name: Create or Update Release
+      - name: Publish Cross-Platform CLI Binaries (Linux & macOS)
+        shell: pwsh
+        run: |
+          $targets = @("linux-x64", "linux-arm64", "osx-x64", "osx-arm64")
+          foreach ($rid in $targets) {
+            $outDir = "publish/$rid"
+            dotnet publish src/Il2CppDumperEx/Il2CppDumperEx.csproj `
+              -c Release `
+              -f net11.0 `
+              -r $rid `
+              --self-contained false `
+              -p:PublishSingleFile=true `
+              -p:DebugType=none `
+              -p:DebugSymbols=false `
+              -o $outDir `
+              --nologo
+            
+            Get-ChildItem -Path $outDir -Filter "*.pdb" -Recurse | Remove-Item -Force
+            tar -czf "publish/Il2CppDumperEx-$rid.tar.gz" -C $outDir .
+            Remove-Item -Recurse -Force $outDir
+          }
+
+      - name: Package Disassembler Scripts
+        shell: pwsh
+        run: |
+          if (Test-Path scripts) {
+            Compress-Archive -Path scripts -DestinationPath publish/disassembler-scripts.zip -Force
+          }
+
+      - name: Generate SHA256 Checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path publish -File |
+            Where-Object { $_.Extension -ne ".sha256" -and $_.Extension -ne ".txt" } |
+            ForEach-Object { "$((Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } |
+            Out-File -FilePath publish/SHA256SUMS.txt -Encoding utf8NoBOM
+
+      - name: Create or Update Rolling Latest Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "Il2CppDumperEx (Latest Build)"
+          target_commitish: ${{ github.sha }}
+          name: "Il2CppDumperEx"
+          make_latest: true
           body: |
-            Automated continuous release from commit ${{ github.sha }}.
-            
-            ### Download
-            - **`Il2CppDumperEx.exe`**: Standalone single-file Windows x64 executable.
-            
-            *Requires [.NET 9 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/9.0).*
+            ${{ inputs.custom_notes }}
+
+            Automated rolling release build from commit `${{ github.sha }}`.
+
+            ### Downloads
+            - **Windows (GUI & CLI)**:
+              - `Il2CppDumperEx-win-x64.zip`
+              - `Il2CppDumperEx-win-arm64.zip`
+            - **Linux (CLI)**:
+              - `Il2CppDumperEx-linux-x64.tar.gz`
+              - `Il2CppDumperEx-linux-arm64.tar.gz`
+            - **macOS (CLI)**:
+              - `Il2CppDumperEx-osx-x64.tar.gz`
+              - `Il2CppDumperEx-osx-arm64.tar.gz`
+            - **Disassembler Scripts**:
+              - `disassembler-scripts.zip`: Enhanced loader scripts for IDA Pro, Ghidra, and Binary Ninja Redux.
+            - **Verification**:
+              - `SHA256SUMS.txt`: SHA-256 verification checksums for all release packages.
+
+            ---
+            *Windows GUI requires [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download). Linux & macOS CLI requires [.NET 11 Runtime](https://dotnet.microsoft.com/download).*
           files: |
-            publish/Il2CppDumperEx.exe
-            publish/Il2CppDumperEx.exe.sha256
+            publish/*.zip
+            publish/*.tar.gz
+            publish/SHA256SUMS.txt
+          generate_release_notes: false
           draft: false
           prerelease: false

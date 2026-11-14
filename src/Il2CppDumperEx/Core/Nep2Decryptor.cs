@@ -262,7 +262,7 @@ public static class Nep2Decryptor
             throw new InvalidMagicException($"Invalid magic: {Convert.ToHexString(rawData.Slice(0, 4))} (expected AF1BB1FA).");
 
         uint headerVal = BinaryPrimitives.ReadUInt32LittleEndian(rawData.Slice(4, 4));
-        if (headerVal < 100)
+        if (MetadataValidator.IsValidMetadataVersion(headerVal))
             throw new AlreadyDecryptedException($"Input already appears decrypted (version {headerVal}).");
 
         int fileSize = rawData.Length;
@@ -346,7 +346,7 @@ public static class Nep2Decryptor
             throw new InvalidMagicException($"Invalid magic: {Convert.ToHexString(header136.AsSpan(0, 4))}.");
 
         uint headerVal = BinaryPrimitives.ReadUInt32LittleEndian(header136.AsSpan(4, 4));
-        if (headerVal < 100)
+        if (MetadataValidator.IsValidMetadataVersion(headerVal))
             throw new AlreadyDecryptedException($"Input already appears decrypted (version {headerVal}).");
 
         int payloadSize = (int)(fileLength - 8);

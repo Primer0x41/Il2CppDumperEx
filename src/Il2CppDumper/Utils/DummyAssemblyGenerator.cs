@@ -25,7 +25,7 @@ namespace Il2CppDumper
         private readonly Dictionary<int, PropertyDefinition> propertyDefinitionDic = new();
         private readonly Dictionary<int, MethodDefinition> methodDefinitionDic = new();
 
-        public DummyAssemblyGenerator(Il2CppExecutor il2CppExecutor, bool addToken)
+        public DummyAssemblyGenerator(Il2CppExecutor il2CppExecutor, bool addToken, string searchDirectory = null)
         {
             executor = il2CppExecutor;
             metadata = il2CppExecutor.metadata;
@@ -44,6 +44,10 @@ namespace Il2CppDumper
             typeSystem = dummyMD.TypeSystem;
 
             var resolver = new MyAssemblyResolver();
+            if (!string.IsNullOrEmpty(searchDirectory))
+            {
+                resolver.AddSearchDirectory(searchDirectory);
+            }
             var moduleParameters = new ModuleParameters
             {
                 Kind = ModuleKind.Dll,

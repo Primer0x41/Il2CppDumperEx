@@ -26,19 +26,19 @@ namespace Il2CppDumper
                 ulong metadataReg = 0;
 
                 if (root.TryGetProperty("codeRegistration", out var codeRegElem))
-                    codeReg = codeRegElem.GetUInt64();
+                    codeReg = ParseAddress(codeRegElem);
 
                 if (root.TryGetProperty("metadataRegistration", out var metaRegElem))
-                    metadataReg = metaRegElem.GetUInt64();
+                    metadataReg = ParseAddress(metaRegElem);
 
                 if (root.TryGetProperty("metadata", out var metadata))
                 {
                     // 从 metadata 对象中读取
                     if (metadata.TryGetProperty("codeRegistration", out var cr))
-                        codeReg = cr.GetUInt64();
+                        codeReg = ParseAddress(cr);
 
                     if (metadata.TryGetProperty("metadataRegistration", out var mr))
-                        metadataReg = mr.GetUInt64();
+                        metadataReg = ParseAddress(mr);
                 }
 
                 if (codeReg != 0 && metadataReg != 0)
@@ -50,6 +50,23 @@ namespace Il2CppDumper
             }
 
             return null;
+        }
+
+        public static ulong ParseAddress(JsonElement elem)
+        {
+            if (elem.ValueKind == JsonValueKind.Number && elem.TryGetUInt64(out var num))
+                return num;
+            if (elem.ValueKind == JsonValueKind.String)
+            {
+                string s = elem.GetString()?.Trim() ?? "";
+                if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                    s = s[2..];
+                if (ulong.TryParse(s, System.Globalization.NumberStyles.HexNumber, null, out var val))
+                    return val;
+                if (ulong.TryParse(s, System.Globalization.NumberStyles.Integer, null, out var decVal))
+                    return decVal;
+            }
+            return 0;
         }
 
         /// <summary>

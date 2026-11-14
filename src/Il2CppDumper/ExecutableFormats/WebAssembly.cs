@@ -46,6 +46,10 @@ namespace Il2CppDumper
 
         public WebAssemblyMemory CreateMemory()
         {
+            if (dataSections == null || dataSections.Length == 0)
+            {
+                return new WebAssemblyMemory(new MemoryStream(), 0);
+            }
             var last = dataSections[^1];
             var bssStart = last.Offset + (uint)last.Data.Length;
             var stream = new MemoryStream(new byte[Length]);

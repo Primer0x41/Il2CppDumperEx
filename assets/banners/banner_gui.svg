@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 96" width="880" height="96" style="background: transparent; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;">
+  <defs>
+    <linearGradient id="guiGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.25" />
+      <stop offset="50%" stop-color="#1D4ED8" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#1E1E24" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="blueLine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#60A5FA" />
+      <stop offset="60%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#1D4ED8" stop-opacity="0.1" />
+    </linearGradient>
+    <filter id="glowBlue" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#3B82F6" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Container Base -->
+  <rect x="0" y="0" width="880" height="96" rx="8" fill="#16161A" stroke="#2D2D36" stroke-width="1" />
+  <rect x="1" y="1" width="878" height="94" rx="7" fill="url(#guiGrad)" />
+
+  <!-- Left Accent Bar -->
+  <rect x="0" y="12" width="5" height="72" rx="2.5" fill="#3B82F6" filter="url(#glowBlue)" />
+
+  <!-- Icon Container -->
+  <rect x="24" y="20" width="56" height="56" rx="10" fill="#1E1E26" stroke="#3B82F6" stroke-width="1.2" stroke-opacity="0.6" />
+  <!-- Display / Window Icon -->
+  <g transform="translate(36, 32)">
+    <rect x="0" y="0" width="32" height="22" rx="3" fill="none" stroke="#60A5FA" stroke-width="2" />
+    <line x1="0" y1="6" x2="32" y2="6" stroke="#3B82F6" stroke-width="1.5" />
+    <circle cx="5" cy="3" r="1.2" fill="#93C5FD" />
+    <circle cx="9" cy="3" r="1.2" fill="#93C5FD" />
+    <line x1="16" y1="22" x2="16" y2="28" stroke="#60A5FA" stroke-width="2" stroke-linecap="round" />
+    <line x1="10" y1="28" x2="22" y2="28" stroke="#60A5FA" stroke-width="2" stroke-linecap="round" />
+  </g>
+
+  <!-- Titles -->
+  <text x="96" y="44" fill="#F4F4F5" font-size="18" font-weight="700" letter-spacing="1">GRAPHICAL USER INTERFACE (GUI)</text>
+  <text x="96" y="66" fill="#94A3B8" font-size="12" font-weight="400">Windows 11 Fluent dark interface • Target ingestion • Live pipeline diagnostics</text>
+
+  <!-- Tag Pill -->
+  <rect x="736" y="32" width="120" height="28" rx="14" fill="#1E293B" stroke="#3B82F6" stroke-width="1" />
+  <circle cx="752" cy="46" r="3.5" fill="#38BDF8" />
+  <text x="764" y="50" fill="#E2E8F0" font-size="11" font-weight="600" letter-spacing="0.5">INTERACTIVE</text>
+
+  <!-- Bottom Accent Highlight -->
+  <rect x="96" y="80" width="600" height="2" fill="url(#blueLine)" rx="1" />
+</svg>

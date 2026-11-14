@@ -264,11 +264,24 @@ namespace Il2CppDumper
         public int adjustorThunk;
     };
 
-    public class Il2CppMethodSpec
+    public class Il2CppMethodSpec : IEquatable<Il2CppMethodSpec>
     {
         public int methodDefinitionIndex;
         public int classIndexIndex;
         public int methodIndexIndex;
+
+        public bool Equals(Il2CppMethodSpec other)
+        {
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return methodDefinitionIndex == other.methodDefinitionIndex &&
+                   classIndexIndex == other.classIndexIndex &&
+                   methodIndexIndex == other.methodIndexIndex;
+        }
+
+        public override bool Equals(object obj) => obj is Il2CppMethodSpec other && Equals(other);
+
+        public override int GetHashCode() => HashCode.Combine(methodDefinitionIndex, classIndexIndex, methodIndexIndex);
     };
 
     public class Il2CppCodeGenModule

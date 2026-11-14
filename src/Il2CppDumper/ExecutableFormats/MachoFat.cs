@@ -9,16 +9,32 @@ namespace Il2CppDumper
 
         public MachoFat(Stream stream) : base(stream)
         {
-            Position += 4;
-            var size = BinaryPrimitives.ReadInt32BigEndian(ReadBytes(4));
+            var magicBytes = ReadBytes(4);
+            var magicBE = BinaryPrimitives.ReadUInt32BigEndian(magicBytes);
+            bool isBigEndian = magicBE == 0xCAFEBABE;
+
+            var sizeBytes = ReadBytes(4);
+            var size = isBigEndian
+                ? BinaryPrimitives.ReadInt32BigEndian(sizeBytes)
+                : BinaryPrimitives.ReadInt32LittleEndian(sizeBytes);
+
+            if (size < 0 || size > 100)
+                throw new InvalidDataException($"Invalid Mach-O fat architecture count: {size}");
+
             fats = new Fat[size];
             for (var i = 0; i < size; i++)
             {
                 Position += 8;
+                var offsetBytes = ReadBytes(4);
+                var sliceSizeBytes = ReadBytes(4);
                 fats[i] = new Fat
                 {
-                    offset = BinaryPrimitives.ReadUInt32BigEndian(ReadBytes(4)),
-                    size = BinaryPrimitives.ReadUInt32BigEndian(ReadBytes(4))
+                    offset = isBigEndian
+                        ? BinaryPrimitives.ReadUInt32BigEndian(offsetBytes)
+                        : BinaryPrimitives.ReadUInt32LittleEndian(offsetBytes),
+                    size = isBigEndian
+                        ? BinaryPrimitives.ReadUInt32BigEndian(sliceSizeBytes)
+                        : BinaryPrimitives.ReadUInt32LittleEndian(sliceSizeBytes)
                 };
                 Position += 4;
             }

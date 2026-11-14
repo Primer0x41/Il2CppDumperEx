@@ -4,10 +4,10 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  Title="Il2CppDumperEx"
                  Icon="pack://application:,,,/Il2CppDumperEx;component/Assets/Icon.ico"
-                 Width="880" Height="720"
-                 MinWidth="880" MaxWidth="880"
-                 MinHeight="720" MaxHeight="720"
-                 ResizeMode="NoResize"
+                 Width="1040" Height="820"
+                 MinWidth="920"
+                 MinHeight="740"
+                 ResizeMode="CanResizeWithGrip"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="None"
@@ -27,12 +27,12 @@
             <RowDefinition Height="Auto" />  <!-- Row 2: Status Bar -->
         </Grid.RowDefinitions>
 
-        <!-- Windows 11 Native Fluent TitleBar with App Icon (Close button only) -->
+        <!-- Windows 11 Native Fluent TitleBar with App Icon -->
         <ui:TitleBar Grid.Row="0"
                      Title="Il2CppDumperEx"
-                     ShowMaximize="False"
-                     CanMaximize="False"
-                     ShowMinimize="False"
+                     ShowMaximize="True"
+                     CanMaximize="True"
+                     ShowMinimize="True"
                      ShowClose="True">
             <ui:TitleBar.Icon>
                 <ui:ImageIcon Source="pack://application:,,,/Il2CppDumperEx;component/Assets/Icon.ico" />
@@ -115,6 +115,8 @@
                         <RowDefinition Height="Auto" />  <!-- Row 1: Output files -->
                         <RowDefinition Height="Auto" />  <!-- Row 2: Dump content (Line 1) -->
                         <RowDefinition Height="Auto" />  <!-- Row 3: Dump content (Line 2) -->
+                        <RowDefinition Height="Auto" />  <!-- Row 4: C# Split Mode -->
+                        <RowDefinition Height="Auto" />  <!-- Row 5: Extended Features -->
                     </Grid.RowDefinitions>
 
                     <!-- Row 0: Metadata Version Selection -->
@@ -143,6 +145,24 @@
                     <CheckBox x:Name="ChkDumpFieldOffset" Grid.Row="3" Grid.Column="1" Content="Field offsets" IsChecked="True" VerticalAlignment="Center" Margin="0,6,6,0" />
                     <CheckBox x:Name="ChkDumpProperty" Grid.Row="3" Grid.Column="2" Content="Properties" IsChecked="True" VerticalAlignment="Center" Margin="0,6,6,0" />
                     <CheckBox x:Name="ChkDumpAttribute" Grid.Row="3" Grid.Column="3" Content="Attributes" IsChecked="True" VerticalAlignment="Center" Margin="0,6,0,0" />
+
+                    <!-- Row 4: C# Output Organization -->
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="C# split mode:" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="11.5"
+                               Foreground="#A1A1AA" Margin="0,8,6,0" />
+                    <ComboBox x:Name="CmbSplitMode" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3"
+                              Height="30" Width="260" HorizontalAlignment="Left" Margin="0,8,0,0"
+                              VerticalContentAlignment="Center" Padding="8,4"
+                              ToolTip="Choose whether to generate a single dump.cs or split files by assembly or namespace.">
+                        <ComboBoxItem Content="Single file (dump.cs)" IsSelected="True" />
+                        <ComboBoxItem Content="Split by Assembly" />
+                        <ComboBoxItem Content="Split by Namespace" />
+                    </ComboBox>
+
+                    <!-- Row 5: Extended Features -->
+                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Disassemblers:" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="11.5"
+                               Foreground="#A1A1AA" Margin="0,8,6,0" />
+                    <CheckBox x:Name="ChkUnifiedJson" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="3" Content="Unified metadata.json (Ghidra / IDA / Binary Ninja)" IsChecked="False" VerticalAlignment="Center" Margin="0,8,0,0"
+                              ToolTip="Exports unified metadata.json symbol map for Ghidra, IDA Pro, and Binary Ninja Redux scripts." />
                 </Grid>
             </ui:CardExpander>
 
@@ -181,6 +201,10 @@
                                        Icon="{ui:SymbolIcon Symbol=Dismiss24}"
                                        Appearance="Danger"
                                        Height="34" Width="95" Margin="0,0,8,0" IsEnabled="False" Click="BtnCancel_Click" />
+                            <ui:Button x:Name="BtnDecryptOnly" Content="Decrypt Metadata Only"
+                                       Icon="{ui:SymbolIcon Symbol=LockOpen24}"
+                                       Appearance="Secondary"
+                                       Height="34" Margin="0,0,8,0" Click="BtnDecryptOnly_Click" />
                             <ui:Button x:Name="BtnStart" Content="Start Dump"
                                        Icon="{ui:SymbolIcon Symbol=Play24}"
                                        Appearance="Primary"

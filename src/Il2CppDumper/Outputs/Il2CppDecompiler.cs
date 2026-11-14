@@ -22,10 +22,112 @@ namespace Il2CppDumper
             methodModifiers = new();
         }
 
+        private static readonly char[] InvalidFileNameChars = Path.GetInvalidFileNameChars();
+
+        private static readonly HashSet<string> ReservedNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "CON", "PRN", "AUX", "NUL",
+            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+        };
+
+        public static string SanitizeFileName(string name)
+        {
+            var chars = name.ToCharArray();
+            bool modified = false;
+            for (int i = 0; i < chars.Length; i++)
+            {
+                if (Array.IndexOf(InvalidFileNameChars, chars[i]) >= 0)
+                {
+                    chars[i] = '_';
+                    modified = true;
+                }
+            }
+            string sanitized = modified ? new string(chars) : name;
+            if (ReservedNames.Contains(sanitized))
+                return "_" + sanitized;
+            return sanitized;
+        }
+
         public void Decompile(Config config, string outputDir)
         {
-            var dumpPath = Path.Combine(outputDir, "dump.cs");
-            var writer = new StreamWriter(new FileStream(dumpPath, FileMode.Create), new UTF8Encoding(false));
+            if (config.SplitMode == DecompileSplitMode.None)
+            {
+                var dumpPath = Path.Combine(outputDir, "dump.cs");
+                using var writer = new StreamWriter(new FileStream(dumpPath, FileMode.Create), new UTF8Encoding(false));
+                DecompileAll(config, writer);
+            }
+            else if (config.SplitMode == DecompileSplitMode.Assembly)
+            {
+                var csharpDir = Path.Combine(outputDir, "CSharp");
+                Directory.CreateDirectory(csharpDir);
+                foreach (var imageDef in metadata.imageDefs)
+                {
+                    var rawImageName = metadata.GetStringFromIndex(imageDef.nameIndex);
+                    var cleanName = SanitizeFileName(Path.GetFileNameWithoutExtension(rawImageName));
+
+                    var asmPath = Path.Combine(csharpDir, $"{cleanName}.cs");
+                    using var writer = new StreamWriter(new FileStream(asmPath, FileMode.Create), new UTF8Encoding(false));
+                    writer.Write($"// Assembly: {rawImageName}\n");
+                    DecompileImage(config, imageDef, writer);
+                }
+            }
+            else if (config.SplitMode == DecompileSplitMode.Namespace)
+            {
+                var csharpDir = Path.Combine(outputDir, "CSharp");
+                Directory.CreateDirectory(csharpDir);
+
+                var namespaceGroups = new Dictionary<string, List<(Il2CppImageDefinition Image, Il2CppTypeDefinition Type, int Index)>>();
+                foreach (var imageDef in metadata.imageDefs)
+                {
+                    var typeEnd = imageDef.typeStart + imageDef.typeCount;
+                    for (int typeDefIndex = imageDef.typeStart; typeDefIndex < typeEnd; typeDefIndex++)
+                    {
+                        var typeDef = metadata.typeDefs[typeDefIndex];
+                        var ns = metadata.GetStringFromIndex(typeDef.namespaceIndex);
+                        if (string.IsNullOrEmpty(ns))
+                            ns = "Global";
+
+                        if (!namespaceGroups.TryGetValue(ns, out var list))
+                        {
+                            list = new List<(Il2CppImageDefinition, Il2CppTypeDefinition, int)>();
+                            namespaceGroups[ns] = list;
+                        }
+                        list.Add((imageDef, typeDef, typeDefIndex));
+                    }
+                }
+
+                foreach (var kvp in namespaceGroups)
+                {
+                    var ns = kvp.Key;
+                    var types = kvp.Value;
+
+                    var parts = ns.Split('.');
+                    for (int i = 0; i < parts.Length; i++)
+                    {
+                        parts[i] = SanitizeFileName(parts[i]);
+                    }
+
+                    string targetFolder = parts.Length > 1
+                        ? Path.Combine(csharpDir, Path.Combine(parts.Take(parts.Length - 1).ToArray()))
+                        : csharpDir;
+                    Directory.CreateDirectory(targetFolder);
+
+                    string fileName = $"{parts.Last()}.cs";
+                    string filePath = Path.Combine(targetFolder, fileName);
+
+                    using var writer = new StreamWriter(new FileStream(filePath, FileMode.Create), new UTF8Encoding(false));
+                    writer.Write($"// Namespace: {ns}\n");
+                    foreach (var (imageDef, typeDef, typeIndex) in types)
+                    {
+                        DecompileType(config, imageDef, typeDef, typeIndex, writer);
+                    }
+                }
+            }
+        }
+
+        private void DecompileAll(Config config, StreamWriter writer)
+        {
             //dump image
             for (var imageIndex = 0; imageIndex < metadata.imageDefs.Length; imageIndex++)
             {
@@ -35,13 +137,36 @@ namespace Il2CppDumper
             //dump type
             foreach (var imageDef in metadata.imageDefs)
             {
-                try
+                DecompileImage(config, imageDef, writer);
+            }
+        }
+
+        private void DecompileImage(Config config, Il2CppImageDefinition imageDef, StreamWriter writer)
+        {
+            try
+            {
+                var imageName = metadata.GetStringFromIndex(imageDef.nameIndex);
+                var typeEnd = imageDef.typeStart + imageDef.typeCount;
+                for (int typeDefIndex = imageDef.typeStart; typeDefIndex < typeEnd; typeDefIndex++)
                 {
-                    var imageName = metadata.GetStringFromIndex(imageDef.nameIndex);
-                    var typeEnd = imageDef.typeStart + imageDef.typeCount;
-                    for (int typeDefIndex = imageDef.typeStart; typeDefIndex < typeEnd; typeDefIndex++)
-                    {
-                        var typeDef = metadata.typeDefs[typeDefIndex];
+                    var typeDef = metadata.typeDefs[typeDefIndex];
+                    DecompileType(config, imageDef, typeDef, typeDefIndex, writer);
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("ERROR: Some errors in dumping");
+                writer.Write("/*");
+                writer.Write(e);
+                writer.Write("*/\n}\n");
+            }
+        }
+
+        private void DecompileType(Config config, Il2CppImageDefinition imageDef, Il2CppTypeDefinition typeDef, int typeDefIndex, StreamWriter writer)
+        {
+            try
+            {
+                var imageName = metadata.GetStringFromIndex(imageDef.nameIndex);
                         var extends = new List<string>();
                         if (typeDef.parentIndex >= 0)
                         {
@@ -384,17 +509,14 @@ namespace Il2CppDumper
                             }
                         }
                         writer.Write("}\n");
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine("ERROR: Some errors in dumping");
-                    writer.Write("/*");
-                    writer.Write(e);
-                    writer.Write("*/\n}\n");
-                }
             }
-            writer.Close();
+            catch (Exception e)
+            {
+                Console.WriteLine("ERROR: Some errors in dumping type");
+                writer.Write("/*");
+                writer.Write(e);
+                writer.Write("*/\n}\n");
+            }
         }
 
         public string GetCustomAttribute(Il2CppImageDefinition imageDef, int customAttributeIndex, uint token, string padding = "")

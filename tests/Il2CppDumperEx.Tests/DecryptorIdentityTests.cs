@@ -35,8 +35,7 @@ public class DecryptorIdentityTests
         return Convert.ToHexString(SHA256.HashData(data));
     }
 
-    // Golden vectors generated directly from frozen reference decryptor (decrypt_global-metadata.py)
-    // Covering 0-block, 1-block, 8-block, 9-block (1152-byte cycle boundary), 10-block, 18-block, 25-block,
+    // Golden vectors Covering 0-block, 1-block, 8-block, 9-block (1152-byte cycle boundary), 10-block, 18-block, 25-block,
     // and various trailing-byte scenarios (0, 1, 15, 33, 50, 77, 99, 127).
     public static IEnumerable<object[]> GetGoldenVectorCases()
     {
@@ -143,12 +142,16 @@ public class DecryptorIdentityTests
         Assert.Throws<InvalidMagicException>(() => Nep2Decryptor.DecryptBytes(badMagic));
     }
 
-    [Fact]
-    public void DecryptBytes_ThrowsAlreadyDecrypted_WhenHeaderVersionUnder100()
+    [Theory]
+    [InlineData(29)]
+    [InlineData(31)]
+    [InlineData(104)]
+    [InlineData(110)]
+    public void DecryptBytes_ThrowsAlreadyDecrypted_WhenHeaderVersionIsValidMetadataVersion(int version)
     {
         byte[] decrypted = new byte[200];
         decrypted[0] = 0xAF; decrypted[1] = 0x1B; decrypted[2] = 0xB1; decrypted[3] = 0xFA;
-        decrypted[4] = 29; // Version 29 < 100
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(decrypted.AsSpan(4, 4), version);
         Assert.Throws<AlreadyDecryptedException>(() => Nep2Decryptor.DecryptBytes(decrypted));
     }
 }

@@ -5,147 +5,61 @@
 # Il2CppDumperEx
 
 <p align="center">
-  <a href="https://github.com/0x7flumic/Il2CppDumperEx/releases">
-    <img src="https://img.shields.io/github/downloads/0x7flumic/Il2CppDumperEx/total?style=flat-square&logo=github&color=38BDF8" alt="Downloads">
+  <a href="https://github.com/Primer0x41/Il2CppDumperEx/releases">
+    <img src="https://img.shields.io/github/downloads/Primer0x41/Il2CppDumperEx/total?style=for-the-badge&logo=github&color=38BDF8" alt="Downloads">
   </a>
-  <img src="https://komarev.com/ghpvc/?username=0x7flumic-Il2CppDumperEx&style=flat-square&color=34D399&label=Visitors" alt="Visitors">
-  <a href="https://github.com/0x7flumic/Il2CppDumperEx/actions/workflows/release.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/0x7flumic/Il2CppDumperEx/release.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=Release" alt="Release Build">
-  </a>
-  <img src="https://img.shields.io/badge/C%23-13.0-239120?style=flat-square&logo=csharp&logoColor=white" alt="C#">
-  <img src="https://img.shields.io/badge/.NET-9.0-512BD4?style=flat-square&logo=dotnet&logoColor=white" alt=".NET 9.0">
-  <img src="https://img.shields.io/badge/Platform-Windows_x64-0078D4?style=flat-square&logo=windows11&logoColor=white" alt="Platform">
+  <img src="https://img.shields.io/badge/C%23-13.0-239120?style=for-the-badge&logo=csharp&logoColor=white" alt="C# 13">
+  <img src="https://img.shields.io/badge/.NET-11.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 11.0">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge&logo=linux&logoColor=white" alt="Multi-Platform">
 </p>
 
-**Il2CppDumperEx** is an automated reverse engineering suite for Unity IL2CPP games. It integrates automatic game file discovery, NEP2 metadata decryption, deterministic version validation (v16–v39), and Il2CppDumper decompilation into a single tool with both a modern GUI and a scriptable CLI.
+**Il2CppDumperEx** is an automated reverse engineering suite for Unity IL2CPP games across PC, mobile, and console platforms. It integrates direct archive ingestion (`.apk`, `.aab`, `.zip`, `.ipa`), automatic binary and metadata resolution, in-memory NEP2 metadata decryption, deterministic version validation (v16–v110), container unwrapping (PlayStation SElf, Switch NSO, Mach-O Fat slices, memory dumps), and symbol export into both a modern Windows 11 Fluent dark GUI and an automation-ready CLI.
+
+> [!WARNING]
+> ### ⚖️ Reverse Engineering & Legal Disclaimer
+> Il2CppDumperEx is strictly intended for software interoperability analysis, security auditing, digital preservation, and educational reverse engineering of Unity software. This tool must not be used to bypass digital rights management (DRM), compromise online multiplayer games, infringe copyrighted intellectual property, or violate software End User License Agreements (EULAs). The authors do not endorse or assume liability for unauthorized or illegal use of this software.
 
 ---
 
-## Features
+## Key Features
 
-- **Automated Game Discovery:** Point to a game directory, `<Game>_Data` folder, or main `.exe`. Automatically locates binaries (`GameAssembly.dll`, `libil2cpp.so`) and `global-metadata.dat`.
-- **NEP2 Decryption:** Detects and decrypts protected metadata using precomputed tiled masks.
-- **Wide Metadata Version Support (v16–v39):** Supports legacy Unity releases through modern Unity 6 metadata formats (v35, v38, v39) via deterministic header and string-heap validation.
-- **Dual Interface:** Modern Windows 11 Fluent dark GUI with real-time log streaming, and a scriptable CLI for automation and headless workflows.
-
----
-
-## Usage
-
-### Graphical Interface (GUI)
-
-<p align="center">
-  <img src="assets/ui_preview.svg" alt="Il2CppDumperEx GUI Preview" width="100%">
-</p>
-
-Run `Il2CppDumperEx.exe`:
-1. **Target Selection:** Drag and drop any game executable, game root folder, or `*_Data` directory onto the window (or click **Browse**).
-2. **Advanced Options (Optional):** Expand the panel to configure:
-   - **Metadata Version:** Select `Auto-detect (recommended)` or lock to a specific version (v16–v39).
-   - **Output Files:** Enable or disable `Dummy DLLs`, `C# (dump.cs)`, or `Headers (il2cpp.h / script.json)`.
-   - **Dump Content:** Toggle inclusion of `Methods`, `Method offsets`, `Fields`, `Field offsets`, `Properties`, and `Attributes`.
-3. **Start:** Click **Start Dump**. The log streams in real-time and an **Open Output Folder** button appears when finished. Output artifacts are saved to `output/<GameName>/`.
-
-### Command-Line Interface (CLI)
-```bash
-# Basic run: auto-discovers game binary and metadata
-Il2CppDumperEx "C:\Games\TargetGame"
-
-# Target specific executable and custom output folder
-Il2CppDumperEx "C:\Games\TargetGame\Game.exe" --out "C:\Dumps\TargetGame"
-
-# Force specific metadata version
-Il2CppDumperEx "C:\Games\TargetGame" --force-version 31
-
-# Customize output artifacts
-Il2CppDumperEx "C:\Games\TargetGame" --no-dummy-dll --no-struct
-```
-
-#### CLI Options Reference
-| Option | Description |
-| :--- | :--- |
-| `game_path` | Path to game folder, `<Game>_Data` directory, or `.exe` |
-| `--out <dir>` | Destination folder for dump outputs (default: `./output/<GameName>`) |
-| `--force-version <N>` | Manually specify metadata version (e.g. `29`, `31`, `38`) |
-| `-v`, `--verbose` | Output detailed diagnostic logs |
-| `--no-dummy-dll` | Skip generating stripped .NET assemblies (`DummyDll/`) |
-| `--no-struct` | Skip generating C/C++ struct definitions (`il2cpp.h`, `script.json`, `stringliteral.json`) |
-| `--no-method` | Skip dumping method signatures |
-| `--no-field` | Skip dumping fields |
-| `--no-property` | Skip dumping properties |
-| `--no-attribute` | Skip dumping custom attributes |
-| `--no-field-offset` | Skip dumping field memory offsets |
-| `--no-method-offset` | Skip dumping method memory pointers |
-| `--no-typedef-index` | Skip dumping TypeDef indices |
-| `--no-token` | Do not attach metadata tokens to DummyDll types |
+- **Automated Game Discovery:** Drop a game executable, `<Game>_Data` folder, or direct archive package (`.apk`, `.aab`, `.zip`, `.ipa`). Automatically isolates binaries (`GameAssembly.dll`, `libil2cpp.so`, `UnityFramework`, `main.nso`, `Il2CppUserAssemblies.prx`, `eboot.bin`, `maps.txt`) and `global-metadata.dat`.
+- **In-Memory NEP2 Decryption:** Identifies and decrypts protected metadata using precomputed tiled substitution masks on the fly, or via standalone `--decrypt-only` mode.
+- **Multi-Platform Containers:** Native unwrapping for Nintendo Switch NSO (Zstandard/LZ4), PlayStation 4/5 SElf, Apple iOS/macOS Mach-O Fat slices, and reconstructed Linux/Android `/proc/<pid>/maps` dumps.
+- **Packer & Entropy Analysis:** Detects commercial packers (ACE, YiDun, SecNeo, VMProtect, Themida, Denuvo) and measures code segment Shannon entropy.
+- **Disassembler Integration:** Generates standard `il2cpp.h`, `script.json`, `stringliteral.json`, unified `metadata.json`, and configurable C# decompiler output (single file, split by assembly, or split by namespace tree).
 
 ---
 
-## Output Files
+## Documentation & Usage
 
-| File / Directory | Description |
-| :--- | :--- |
-| `dump.cs` | Decompiled C# pseudocode declarations with classes, methods, fields, and properties |
-| `il2cpp.h` | C/C++ struct headers and function declarations for IDA Pro, Ghidra, and Binary Ninja |
-| `script.json` | Symbol addresses, method pointers, and metadata indices (compatible with standard Il2CppDumper scripts) |
-| `stringliteral.json` | Decoded string literal addresses and string contents |
-| `DummyDll/` | Stripped .NET reference assemblies readable in dnSpy, ILSpy, or Visual Studio |
+For full GUI walkthroughs, CLI arguments reference, container format guides, and disassembler setup (IDA Pro, Ghidra, Binary Ninja):
 
----
-
-## Disassembler & Decompiler Scripts
-
-The [`scripts/`](scripts/) directory contains helper loaders to import `script.json` and `il2cpp.h` directly into native reverse engineering tools:
-
-| Tool | Script | Description |
-| :--- | :--- | :--- |
-| **IDA Pro** | [`scripts/ida/ida_with_struct_py3.py`](scripts/ida/ida_with_struct_py3.py) | **Recommended (Python 3):** Loads `script.json` symbols and imports `il2cpp.h` structs and function definitions |
-| | [`scripts/ida/ida_py3.py`](scripts/ida/ida_py3.py) | Renames methods and string literals from `script.json` (Python 3) |
-| | [`scripts/ida/ida_with_struct.py`](scripts/ida/ida_with_struct.py) | Struct + symbol loader for legacy Python 2 IDA installations |
-| **Ghidra** | [`scripts/ghidra/ghidra_with_struct.py`](scripts/ghidra/ghidra_with_struct.py) | **Recommended:** Applies `script.json` symbol names, strings, and imports `il2cpp.h` structs via Ghidra C-parser |
-| | [`scripts/ghidra/ghidra.py`](scripts/ghidra/ghidra.py) | Standard symbol and string literal importer |
-| | [`scripts/ghidra/ghidra_wasm.py`](scripts/ghidra/ghidra_wasm.py) | Importer for WebAssembly IL2CPP targets |
-| **Binary Ninja** | [`scripts/binaryninja/`](scripts/binaryninja/) | Plugin package (`plugin.json` / `__init__.py`) to import symbols and types |
-| **Hopper** | [`scripts/hopper/hopper-py3.py`](scripts/hopper/hopper-py3.py) | Symbol and string annotator for Hopper Disassembler v4+ |
-
-### Usage Guide
-
-#### IDA Pro
-1. Open and disassemble `GameAssembly.dll` (or `libil2cpp.so`) in IDA and wait for initial auto-analysis to finish.
-2. Select **File** &rarr; **Script file...** (or press `Alt + F7`).
-3. Choose [`scripts/ida/ida_with_struct_py3.py`](scripts/ida/ida_with_struct_py3.py) (for IDA 7.4+ with Python 3).
-4. When prompted by the file dialogs:
-   - Select `script.json`
-   - Select `il2cpp.h`
-5. The script parses C declarations via `parse_decls()`, applies struct types, renames function symbols, and annotates string literals.
-
-#### Ghidra
-Because Ghidra's built-in C-parser cannot directly parse raw C++ style inheritance syntax (`: Parent {`), follow this 3-step import process:
-1. **Preprocess the header:** Run [`scripts/ghidra/il2cpp_header_to_ghidra.py`](scripts/ghidra/il2cpp_header_to_ghidra.py) in the same directory as `il2cpp.h` to generate `il2cpp_ghidra.h`:
-   ```bash
-   python scripts/ghidra/il2cpp_header_to_ghidra.py
-   ```
-2. **Parse data types:** In Ghidra, open your project, go to **File** &rarr; **Parse C Source...**, clear existing entries, add `il2cpp_ghidra.h`, and click **Parse to Program** to import all structs into Ghidra's Data Type Manager.
-3. **Apply symbols and signatures:** Open Ghidra's **Script Manager** (`Window` &rarr; `Script Manager`), add `scripts/ghidra/` to your script directories, select and run [`scripts/ghidra/ghidra_with_struct.py`](scripts/ghidra/ghidra_with_struct.py), and choose `script.json` when prompted.
+👉 **[Read the Full User Guide & Technical Manual (USAGE_GUIDE.md)](USAGE_GUIDE.md)**
 
 ---
 
 ## Building from Source
 
-### Prerequisites
-- Windows 10/11 x64
-- .NET 9 SDK
+Requires the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0).
 
-```powershell
-.\build.ps1
-```
-Builds and verifies tests, publishing `publish\Il2CppDumperEx.exe`.
+- **Windows (GUI & CLI):**
+  ```powershell
+  .\build.ps1
+  ```
+- **Linux & macOS (CLI):**
+  ```bash
+  dotnet publish src/Il2CppDumperEx/Il2CppDumperEx.csproj -c Release -f net11.0 -r linux-x64 --self-contained false -p:PublishSingleFile=true -o publish
+  ```
 
 ---
 
 ## Credits & Licenses
-- **[Il2CppDumper](https://github.com/Perfare/Il2CppDumper)** by Perfare & **[c01ns fork](https://github.com/c01ns/Il2CppDumper)** (MIT License)
-- **[Mono.Cecil](https://github.com/jbevain/cecil)** by Jb Evain (MIT License)
-- **[WPF-UI](https://github.com/lepoco/wpfui)** by Leszek Pomianowski (MIT License)
-- **NEP2 Research:** [YuroGod](https://github.com/YuroGod/metadata_decrypt)
+
+- **[Il2CppDumper](https://github.com/Perfare/Il2CppDumper)** by Perfare & **[c01ns fork](https://github.com/c01ns/Il2CppDumper)** (MIT License) — decompilation engine, symbol extraction, and executable formats.
+- **[Il2CppInspectorRedux](https://github.com/LukeFZ/Il2CppInspectorRedux)** by LukeFZ & **[Il2CppInspector](https://github.com/djkaty/Il2CppInspector)** by Katy Coe (AGPL-3.0 License) — disassembler scripts and Mach-O Fat slice handling.
+- **[Mono.Cecil](https://github.com/jbevain/cecil)** by Jb Evain (MIT License) — stripped Dummy DLL reference assembly generation.
+- **[WPF-UI](https://github.com/lepoco/wpfui)** by Leszek Pomianowski (MIT License) — Windows 11 Fluent dark theme and controls.
+- **[ZstdSharp.Port](https://github.com/oleg-st/ZstdSharp)** by Oleg Stefaniuk (MIT License) — Zstandard / ZBIC decompression for Nintendo Switch NSO binaries.
+- **NEP2 Research:** [YuroGod](https://github.com/YuroGod/metadata_decrypt) — reverse engineering of the NetEase NEP2 metadata substitution cipher.
 - **Application Icon:** <a href="https://www.flaticon.com/free-icons/game-development" title="game development icons">Game development icons created by andinur - Flaticon</a>

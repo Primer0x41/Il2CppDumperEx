@@ -15,8 +15,13 @@ namespace Il2CppDumper
         private Elf64_Shdr[] sectionTable;
         private Elf64_Phdr pt_dynamic;
 
-        public Elf64(Stream stream) : base(stream)
+        public Elf64_Dyn[] DynamicSection => dynamicSection;
+        public Elf64_Sym[] SymbolTable => symbolTable;
+        public Elf64_Phdr[] ProgramSegments => programSegment;
+
+        public Elf64(Stream stream, bool isSElfContainer = false) : base(stream)
         {
+            IsSElfContainer = isSElfContainer;
             Load();
         }
 
@@ -38,7 +43,7 @@ namespace Il2CppDumper
             if (!IsDumped)
             {
                 RelocationProcessing();
-                if (CheckProtection())
+                if (!IsSElfContainer && CheckProtection())
                 {
                     Console.WriteLine("ERROR: This file may be protected.");
                 }
@@ -182,7 +187,6 @@ namespace Il2CppDumper
 
         private void RelocationProcessing()
         {
-            Console.WriteLine("Applying relocations...");
             try
             {
                 var relaOffset = MapVATR(dynamicSection.First(x => x.d_tag == DT_RELA).d_un);
@@ -233,8 +237,8 @@ namespace Il2CppDumper
                     switch (name)
                     {
                         case "JNI_OnLoad":
-                            Console.WriteLine("WARNING: find JNI_OnLoad");
-                            return true;
+                            Console.WriteLine("[*] Info: Native library exports JNI_OnLoad (plugin/wrapper initialization)");
+                            return false;
                     }
                 }
                 if (sectionTable != null && sectionTable.Any(x => x.sh_type == SHT_LOUSER))
