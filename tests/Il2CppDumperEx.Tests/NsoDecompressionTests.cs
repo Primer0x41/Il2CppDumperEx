@@ -131,4 +131,37 @@ public class NsoDecompressionTests
 
         Assert.Throws<InvalidDataException>(() => nso.UnCompress());
     }
+
+    [Fact]
+    public void Nso_MapVATR_UnmappedAddress_ReturnsZeroWithoutThrowing()
+    {
+        byte[] text = new byte[16];
+        byte[] ro = new byte[16];
+        byte[] data = new byte[16];
+        byte[] nsoBytes = BuildSyntheticNso(0, text, 16, ro, 16, data, 16);
+
+        using var stream = new MemoryStream(nsoBytes);
+        var nso = new NSO(stream);
+
+        // Address 0xDEADBEEF is outside any segment
+        ulong mapped = nso.MapVATR(0xDEADBEEFUL);
+        Assert.Equal(0UL, mapped);
+    }
+
+    [Fact]
+    public void Nso_MapVATR_SegmentBoundary_DoesNotMatchPreviousSegment()
+    {
+        byte[] text = new byte[0x100];
+        byte[] ro = new byte[0x100];
+        byte[] data = new byte[0x100];
+        byte[] nsoBytes = BuildSyntheticNso(0, text, 0x100, ro, 0x100, data, 0x100);
+
+        using var stream = new MemoryStream(nsoBytes);
+        var nso = new NSO(stream);
+
+        // Address 0x100 is the exact exclusive boundary of TextSegment (MemoryOffset 0, size 0x100).
+        // It must NOT match TextSegment.
+        ulong mapped = nso.MapVATR(0x100);
+        Assert.Equal(0UL, mapped);
+    }
 }

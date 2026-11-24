@@ -139,7 +139,10 @@ internal static class Program
                 Console.SetIn(new StreamReader(fsIn, Console.InputEncoding));
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[RedirectConsoleStreams] Exception: {ex.Message}");
+        }
     }
 #endif
 
@@ -253,6 +256,10 @@ internal static class Program
             else if (arg is "--unified-json")
             {
                 dumperConfig.GenerateUnifiedJson = true;
+            }
+            else if (arg is "--gen-mod-project")
+            {
+                dumperConfig.GenerateModProject = true;
             }
             else if (arg is "--split-mode" && i + 1 < args.Length)
             {
@@ -401,6 +408,7 @@ Options:
 Dump Options (All enabled by default):
   --split-mode <mode>   C# dump output mode: none (dump.cs), assembly (by dll), namespace (folder tree)
   --unified-json        Generate unified metadata.json symbol map for disassemblers
+  --gen-mod-project     Generate a ready-to-build .NET plugin C# project referencing DummyDll
   --no-cs               Disable C# decompilation (dump.cs / CSharp folder)
   --no-dummy-dll        Disable generation of DummyDll assemblies
   --no-struct           Disable generation of struct definitions (il2cpp.h, script.json, stringliteral.json)

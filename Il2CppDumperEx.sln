@@ -9,7 +9,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Il2CppDumperEx", "src\Il2Cp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Il2CppDumperEx.Tests", "tests\Il2CppDumperEx.Tests\Il2CppDumperEx.Tests.csproj", "{C55B7A8A-C193-4092-8C81-5A29F007F28B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Il2CppDumper", "src\Il2CppDumper\Il2CppDumper.csproj", "{548203DC-E68D-4842-AF02-A50B49F2C96E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Il2CppDumper.Core", "src\Il2CppDumper.Core\Il2CppDumper.Core.csproj", "{548203DC-E68D-4842-AF02-A50B49F2C96E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

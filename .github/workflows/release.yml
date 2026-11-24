@@ -29,6 +29,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
 
       - name: Run Test Suite
         run: dotnet test Il2CppDumperEx.sln -c Release --nologo

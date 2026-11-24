@@ -90,4 +90,25 @@ public class ArmUtilsTests
         byte[] inst2 = MakeInstruction(insWithShift);
         Assert.Equal(16UL << 12, ArmUtils.DecodeAdd(inst2));
     }
+
+    [Fact]
+    public void ArmUtils_TruncatedBuffers_DoNotThrowExceptions()
+    {
+        // Truncated asm buffer for DecodeMov
+        Assert.Equal(0u, ArmUtils.DecodeMov(new byte[3]));
+        Assert.Equal(0u, ArmUtils.DecodeMov(null!));
+
+        // Truncated inst buffer for DecodeAdr / DecodeAdrp / DecodeAdd / IsAdr
+        Assert.Equal(0x1000UL, ArmUtils.DecodeAdr(0x1000UL, new byte[2]));
+        Assert.Equal(0x1000UL, ArmUtils.DecodeAdr(0x1000UL, null!));
+
+        Assert.Equal(0x2000UL, ArmUtils.DecodeAdrp(0x2000UL, new byte[1]));
+        Assert.Equal(0x2000UL, ArmUtils.DecodeAdrp(0x2000UL, null!));
+
+        Assert.Equal(0UL, ArmUtils.DecodeAdd(new byte[0]));
+        Assert.Equal(0UL, ArmUtils.DecodeAdd(null!));
+
+        Assert.False(ArmUtils.IsAdr(new byte[2]));
+        Assert.False(ArmUtils.IsAdr(null!));
+    }
 }

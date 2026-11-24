@@ -269,7 +269,10 @@ public class DumpPipeline
                     Directory.Delete(game.TempExtractionDir, true);
                     Log($"[*] Cleaned up temporary archive directory: {game.TempExtractionDir}");
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Log($"[!] Warning: Failed to clean up temp extraction dir '{game.TempExtractionDir}': {ex.Message}");
+                }
             }
         }
     }
@@ -481,7 +484,10 @@ public class DumpPipeline
                 return fallback;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DetermineGameName] Exception: {ex.Message}");
+        }
 
         return "Dump";
     }

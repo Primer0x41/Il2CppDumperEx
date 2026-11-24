@@ -20,7 +20,7 @@ $exeName = if ($Runtime -like "win*") { "Il2CppDumperEx.exe" } else { "Il2CppDum
 $ExePath = Join-Path $PublishDir $exeName
 
 Write-Host "==================================================" -ForegroundColor Cyan
-Write-Host "       Il2CppDumperEx Build & Packaging          " -ForegroundColor Cyan
+Write-Host "               Il2CppDumperEx Build               " -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 
 # 1. Run Unit Tests
@@ -38,7 +38,13 @@ if (-not $SkipTests) {
 # 2. Publish Single-File Executable
 Write-Host "[2/2] Publishing clean single-file executable ($Runtime, $Framework)..." -ForegroundColor Yellow
 if (Test-Path $PublishDir) {
-    Remove-Item $PublishDir -Recurse -Force
+    # Remove previous executable and archive outputs without deleting user subdirectories
+    if (Test-Path $ExePath) { Remove-Item $ExePath -Force }
+    Get-ChildItem -Path $PublishDir -Filter "*.zip" -File | Remove-Item -Force
+    Get-ChildItem -Path $PublishDir -Filter "*.tar.gz" -File | Remove-Item -Force
+    Get-ChildItem -Path $PublishDir -Filter "SHA256SUMS.txt" -File | Remove-Item -Force
+} else {
+    New-Item -ItemType Directory -Path $PublishDir -Force | Out-Null
 }
 
 dotnet publish "$RootDir\src\Il2CppDumperEx\Il2CppDumperEx.csproj" `

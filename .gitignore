@@ -13,13 +13,9 @@ output/
 *.userosscache
 *.sln.docstates
 *.suo
-
-# Diagnostic files
 *.log
-err.txt
-out.txt
 
-# Operating System Files
+# OS Files
 Thumbs.db
 ehthumbs.db
 Desktop.ini

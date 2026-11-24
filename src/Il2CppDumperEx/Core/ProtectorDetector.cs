@@ -27,25 +27,26 @@ public record ProtectionReport(
 public static class ProtectorDetector
 {
     // High-confidence library names associated with commercial packers and anti-tamper engines
-    private static readonly (string FileName, string Name, string Vendor)[] KnownProtectorLibraries =
-    [
-        ("libsecmain.so", "SecNeo", "Bangcle"),
-        ("libsecexe.so", "SecNeo", "Bangcle"),
-        ("libtersafe.so", "ACE (Anti-Cheat Expert)", "Tencent"),
-        ("libanogs.so", "ACE (Anti-Cheat Expert)", "Tencent"),
-        ("libshell.so", "Legu Protector", "Tencent"),
-        ("libtup.so", "Legu Protector", "Tencent"),
-        ("libnesec.so", "YiDun (Dun)", "NetEase"),
-        ("libcrashsdk.so", "YiDun (Dun)", "NetEase"),
-        ("libjiagu.so", "Jiagu", "Qihoo 360"),
-        ("libjiagu_art.so", "Jiagu", "Qihoo 360"),
-        ("libjiagu_x86.so", "Jiagu", "Qihoo 360"),
-        ("libexec.so", "Ijiami", "Ijiami"),
-        ("libexecmain.so", "Ijiami", "Ijiami"),
-        ("libbaiduprotect.so", "Baidu Protect", "Baidu"),
-        ("ACE-BASE.dll", "ACE (Anti-Cheat Expert)", "Tencent"),
-        ("ACE-DRV64.sys", "ACE (Anti-Cheat Expert)", "Tencent")
-    ];
+    private static readonly Dictionary<string, (string Name, string Vendor)> KnownProtectors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["libsecmain.so"] = ("SecNeo", "Bangcle"),
+        ["libsecexe.so"] = ("SecNeo", "Bangcle"),
+        ["libtersafe.so"] = ("ACE (Anti-Cheat Expert)", "Tencent"),
+        ["libanogs.so"] = ("ACE (Anti-Cheat Expert)", "Tencent"),
+        ["libshell.so"] = ("Legu Protector", "Tencent"),
+        ["libtup.so"] = ("Legu Protector", "Tencent"),
+        ["libnesec.so"] = ("YiDun (Dun)", "NetEase"),
+        ["libcrashsdk.so"] = ("YiDun (Dun)", "NetEase"),
+        ["libjiagu.so"] = ("Jiagu", "Qihoo 360"),
+        ["libjiagu_art.so"] = ("Jiagu", "Qihoo 360"),
+        ["libjiagu_x86.so"] = ("Jiagu", "Qihoo 360"),
+        ["libexec.so"] = ("Ijiami", "Ijiami"),
+        ["libexecmain.so"] = ("Ijiami", "Ijiami"),
+        ["libbaiduprotect.so"] = ("Baidu Protect", "Baidu"),
+        ["ACE-BASE.dll"] = ("ACE (Anti-Cheat Expert)", "Tencent"),
+        ["ACE-DRV64.sys"] = ("ACE (Anti-Cheat Expert)", "Tencent"),
+        ["0Oo0oo0o0.dat"] = ("Legu / ACE Asset Wrapper", "Tencent")
+    };
 
     // High-confidence section names in PE/ELF executables
     private static readonly (string SectionName, string Name, string Vendor)[] KnownProtectorSections =
@@ -104,25 +105,30 @@ public static class ProtectorDetector
         {
             try
             {
-                var enumOptions = new EnumerationOptions { IgnoreInaccessible = true, RecurseSubdirectories = true };
-                foreach (var file in Directory.EnumerateFiles(gameRoot, "*.*", enumOptions))
+                var enumOptions = new EnumerationOptions
                 {
-                    string fileName = Path.GetFileName(file);
-                    foreach (var (libName, name, vendor) in KnownProtectorLibraries)
+                    IgnoreInaccessible = true,
+                    RecurseSubdirectories = true,
+                    AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint,
+                    MaxRecursionDepth = 10
+                };
+                foreach (var pattern in new[] { "*.so", "*.dll", "*.sys", "*.dat" })
+                {
+                    foreach (var file in Directory.EnumerateFiles(gameRoot, pattern, enumOptions))
                     {
-                        if (fileName.Equals(libName, StringComparison.OrdinalIgnoreCase))
+                        string fileName = Path.GetFileName(file);
+                        if (KnownProtectors.TryGetValue(fileName, out var match))
                         {
-                            matches.Add(new ProtectorMatch(name, vendor, $"File: {fileName}", IsDefinite: true));
+                            string prefix = fileName.EndsWith(".dat", StringComparison.OrdinalIgnoreCase) ? "Asset" : "File";
+                            matches.Add(new ProtectorMatch(match.Name, match.Vendor, $"{prefix}: {fileName}", IsDefinite: true));
                         }
-                    }
-
-                    if (fileName.Equals("0Oo0oo0o0.dat", StringComparison.OrdinalIgnoreCase))
-                    {
-                        matches.Add(new ProtectorMatch("Legu / ACE Asset Wrapper", "Tencent", $"Asset: {fileName}", IsDefinite: true));
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ScanGameDirectory] Error reading directory {gameRoot}: {ex.Message}");
+            }
         }
 
         if (File.Exists(binaryPath))
@@ -142,7 +148,10 @@ public static class ProtectorDetector
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ScanGameDirectory] Error reading binary header: {ex.Message}");
+            }
         }
 
         if (metadataBytes != null && metadataBytes.Length >= 8)
@@ -166,7 +175,10 @@ public static class ProtectorDetector
                     entropyResult = new EntropyResult(entropy, isPacked);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ScanGameDirectory] Error calculating code entropy: {ex.Message}");
+            }
         }
 
         var distinctMatches = matches

@@ -76,4 +76,12 @@ public class Il2CppInspectorBridgeTests
             if (File.Exists(tmpFile)) File.Delete(tmpFile);
         }
     }
+
+    [Fact]
+    public void AutoDetect_RelativeFilenameWithoutDirectory_ReturnsNull()
+    {
+        // When il2cppPath is just a bare filename with no directory, it must not scan current working directory
+        var result = Il2CppInspectorBridge.AutoDetect("GameAssembly.dll");
+        Assert.Null(result);
+    }
 }

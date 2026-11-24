@@ -110,5 +110,42 @@ namespace Il2CppDumperEx.Tests
                 Assert.Equal((byte)(i + 1), elfBytes[(long)fileOffset + i]);
             }
         }
+
+        [Fact]
+        public void Elf64_MissingPtDynamic_ThrowsInvalidDataException()
+        {
+            using var ms = new MemoryStream();
+            using var bw = new BinaryWriter(ms);
+
+            // ELF Header (64 bytes)
+            bw.Write(new byte[] { 0x7F, 0x45, 0x4C, 0x46, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+            bw.Write((ushort)2);    // e_type = ET_EXEC
+            bw.Write((ushort)0xB7); // e_machine = AARCH64
+            bw.Write(1u);           // e_version
+            bw.Write(0UL);          // e_entry
+            bw.Write(64UL);         // e_phoff = 64
+            bw.Write(0UL);          // e_shoff
+            bw.Write(0u);           // e_flags
+            bw.Write((ushort)64);   // e_ehsize
+            bw.Write((ushort)56);   // e_phentsize
+            bw.Write((ushort)1);    // e_phnum = 1
+            bw.Write((ushort)0);    // e_shentsize
+            bw.Write((ushort)0);    // e_shnum
+            bw.Write((ushort)0);    // e_shstrndx
+
+            // Program Header: PT_LOAD = 1 (NOT PT_DYNAMIC = 2)
+            bw.Write(1u);           // p_type = PT_LOAD
+            bw.Write(7u);           // p_flags
+            bw.Write(0UL);          // p_offset
+            bw.Write(0UL);          // p_vaddr
+            bw.Write(0UL);          // p_paddr
+            bw.Write(64UL);         // p_filesz
+            bw.Write(64UL);         // p_memsz
+            bw.Write(4096UL);       // p_align
+
+            ms.Position = 0;
+            var ex = Assert.Throws<InvalidDataException>(() => new Elf64(ms));
+            Assert.Contains("missing PT_DYNAMIC", ex.Message);
+        }
     }
 }

@@ -115,8 +115,9 @@
                         <RowDefinition Height="Auto" />  <!-- Row 1: Output files -->
                         <RowDefinition Height="Auto" />  <!-- Row 2: Dump content (Line 1) -->
                         <RowDefinition Height="Auto" />  <!-- Row 3: Dump content (Line 2) -->
-                        <RowDefinition Height="Auto" />  <!-- Row 4: C# Split Mode -->
-                        <RowDefinition Height="Auto" />  <!-- Row 5: Extended Features -->
+                        <RowDefinition Height="Auto" />  <!-- Row 4: Dump content (Line 3) -->
+                        <RowDefinition Height="Auto" />  <!-- Row 5: C# Split Mode -->
+                        <RowDefinition Height="Auto" />  <!-- Row 6: Extended Features -->
                     </Grid.RowDefinitions>
 
                     <!-- Row 0: Metadata Version Selection -->
@@ -135,7 +136,7 @@
                               ToolTip="Generates il2cpp.h (C++ structures) and script.json (symbol mappings for IDA/Ghidra)" />
 
                     <!-- Row 2: Dump Content Line 1 -->
-                    <TextBlock Grid.Row="2" Grid.RowSpan="2" Grid.Column="0" Text="Dump content:" VerticalAlignment="Top" FontWeight="SemiBold" FontSize="11.5"
+                    <TextBlock Grid.Row="2" Grid.RowSpan="3" Grid.Column="0" Text="Dump content:" VerticalAlignment="Top" FontWeight="SemiBold" FontSize="11.5"
                                Foreground="#A1A1AA" Margin="0,10,6,0" />
                     <CheckBox x:Name="ChkDumpMethod" Grid.Row="2" Grid.Column="1" Content="Methods" IsChecked="True" VerticalAlignment="Center" Margin="0,8,6,0" />
                     <CheckBox x:Name="ChkDumpMethodOffset" Grid.Row="2" Grid.Column="2" Content="Method offsets" IsChecked="True" VerticalAlignment="Center" Margin="0,8,6,0" />
@@ -146,10 +147,16 @@
                     <CheckBox x:Name="ChkDumpProperty" Grid.Row="3" Grid.Column="2" Content="Properties" IsChecked="True" VerticalAlignment="Center" Margin="0,6,6,0" />
                     <CheckBox x:Name="ChkDumpAttribute" Grid.Row="3" Grid.Column="3" Content="Attributes" IsChecked="True" VerticalAlignment="Center" Margin="0,6,0,0" />
 
-                    <!-- Row 4: C# Output Organization -->
-                    <TextBlock Grid.Row="4" Grid.Column="0" Text="C# split mode:" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="11.5"
+                    <!-- Row 4: Dump Content Line 3 -->
+                    <CheckBox x:Name="ChkDumpTypeDefIndex" Grid.Row="4" Grid.Column="1" Content="TypeDef indices" IsChecked="True" VerticalAlignment="Center" Margin="0,6,6,0"
+                              ToolTip="Emits TypeDef index annotations on classes and methods" />
+                    <CheckBox x:Name="ChkDummyDllToken" Grid.Row="4" Grid.Column="2" Content="DummyDll tokens" IsChecked="True" VerticalAlignment="Center" Margin="0,6,6,0"
+                              ToolTip="Embeds metadata tokens into DummyDll types and members" />
+
+                    <!-- Row 5: C# Output Organization -->
+                    <TextBlock Grid.Row="5" Grid.Column="0" Text="C# split mode:" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="11.5"
                                Foreground="#A1A1AA" Margin="0,8,6,0" />
-                    <ComboBox x:Name="CmbSplitMode" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3"
+                    <ComboBox x:Name="CmbSplitMode" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="3"
                               Height="30" Width="260" HorizontalAlignment="Left" Margin="0,8,0,0"
                               VerticalContentAlignment="Center" Padding="8,4"
                               ToolTip="Choose whether to generate a single dump.cs or split files by assembly or namespace.">
@@ -158,11 +165,13 @@
                         <ComboBoxItem Content="Split by Namespace" />
                     </ComboBox>
 
-                    <!-- Row 5: Extended Features -->
-                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Disassemblers:" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="11.5"
+                    <!-- Row 6: Extended Features -->
+                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Extensions:" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="11.5"
                                Foreground="#A1A1AA" Margin="0,8,6,0" />
-                    <CheckBox x:Name="ChkUnifiedJson" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="3" Content="Unified metadata.json (Ghidra / IDA / Binary Ninja)" IsChecked="False" VerticalAlignment="Center" Margin="0,8,0,0"
+                    <CheckBox x:Name="ChkUnifiedJson" Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Content="Unified metadata.json (Ghidra / IDA / Binja)" IsChecked="False" VerticalAlignment="Center" Margin="0,8,0,0"
                               ToolTip="Exports unified metadata.json symbol map for Ghidra, IDA Pro, and Binary Ninja Redux scripts." />
+                    <CheckBox x:Name="ChkGenModProject" Grid.Row="6" Grid.Column="3" Content="Mod Project (.csproj)" IsChecked="False" VerticalAlignment="Center" Margin="0,8,0,0"
+                              ToolTip="Generates a ready-to-build C# plugin project linking against DummyDll/" />
                 </Grid>
             </ui:CardExpander>
 

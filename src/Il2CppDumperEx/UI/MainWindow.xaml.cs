@@ -55,6 +55,8 @@ public partial class MainWindow : FluentWindow
     }
 
     private readonly ObservableCollection<LogEntry> _logEntries = [];
+    private readonly System.Collections.Concurrent.ConcurrentQueue<LogEntry> _pendingLogQueue = new();
+    private readonly DispatcherTimer _logFlushTimer = new();
     private ScrollViewer? _logScrollViewer;
     private CancellationTokenSource? _cts;
     private string? _lastOutputDir;
@@ -91,11 +93,42 @@ public partial class MainWindow : FluentWindow
             StatusTimer.Text = _stopwatch.Elapsed.ToString(@"hh\:mm\:ss");
         };
 
+        _logFlushTimer.Interval = TimeSpan.FromMilliseconds(50);
+        _logFlushTimer.Tick += (s, e) => FlushLogQueue();
+
         SetStateReady();
 
         if (!string.IsNullOrWhiteSpace(initialPath))
         {
             SetGamePath(initialPath);
+        }
+    }
+
+    private void FlushLogQueue()
+    {
+        if (_pendingLogQueue.IsEmpty) return;
+
+        bool autoScroll = _logScrollViewer == null || _logScrollViewer.VerticalOffset >= _logScrollViewer.ScrollableHeight - 16;
+        int added = 0;
+
+        while (_pendingLogQueue.TryDequeue(out var entry))
+        {
+            _logEntries.Add(entry);
+            added++;
+        }
+
+        if (_logEntries.Count > 2500)
+        {
+            int toRemove = Math.Min(300, _logEntries.Count - 2500);
+            for (int k = 0; k < toRemove; k++)
+            {
+                _logEntries.RemoveAt(0);
+            }
+        }
+
+        if (autoScroll && added > 0 && _logScrollViewer != null)
+        {
+            _logScrollViewer.ScrollToBottom();
         }
     }
 
@@ -365,12 +398,13 @@ public partial class MainWindow : FluentWindow
             DumpFieldOffset = ChkDumpFieldOffset.IsChecked == true,
             DumpProperty = ChkDumpProperty.IsChecked == true,
             DumpAttribute = ChkDumpAttribute.IsChecked == true,
-            DumpTypeDefIndex = true,
-            DummyDllAddToken = true,
+            DumpTypeDefIndex = ChkDumpTypeDefIndex.IsChecked == true,
+            DummyDllAddToken = ChkDummyDllToken.IsChecked == true,
             RequireAnyKey = false,
             ForceDump = false,
             NoRedirectedPointer = false,
             GenerateUnifiedJson = ChkUnifiedJson.IsChecked == true,
+            GenerateModProject = ChkGenModProject.IsChecked == true,
             SplitMode = CmbSplitMode.SelectedIndex switch
             {
                 1 => DecompileSplitMode.Assembly,
@@ -399,6 +433,7 @@ public partial class MainWindow : FluentWindow
 
         _stopwatch.Restart();
         _elapsedTimer.Start();
+        _logFlushTimer.Start();
 
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
@@ -444,57 +479,48 @@ public partial class MainWindow : FluentWindow
 
         Action<string> logCallback = msg =>
         {
-            Dispatcher.InvokeAsync(() =>
+            if (msg.Contains("[*] Unity Version: ", StringComparison.Ordinal))
             {
-                if (msg.Contains("[*] Unity Version: ", StringComparison.Ordinal))
+                Dispatcher.InvokeAsync(() =>
                 {
                     _detectedUnityVersion = msg.Substring(msg.IndexOf("[*] Unity Version: ") + 19).Trim();
                     UpdateVersionsDisplay();
-                }
-                else if (msg.Contains("successfully validated for version ", StringComparison.Ordinal))
+                });
+            }
+            else if (msg.Contains("successfully validated for version ", StringComparison.Ordinal))
+            {
+                Dispatcher.InvokeAsync(() =>
                 {
                     int start = msg.IndexOf("for version ") + 12;
                     int end = msg.IndexOf(' ', start);
                     _detectedMetadataVersion = end > start ? "v" + msg[start..end] : "v" + msg[start..];
                     UpdateVersionsDisplay();
-                }
+                });
+            }
 
-                Brush brush = BrushInfo;
-                if (msg.StartsWith("[x]", StringComparison.OrdinalIgnoreCase) || msg.Contains("ERROR", StringComparison.OrdinalIgnoreCase) || msg.Contains("Exception", StringComparison.OrdinalIgnoreCase))
-                {
-                    brush = BrushError;
-                }
-                else if (msg.StartsWith("[!]", StringComparison.OrdinalIgnoreCase) || msg.Contains("WARN", StringComparison.OrdinalIgnoreCase))
-                {
-                    brush = BrushWarn;
-                }
-                else if (msg.StartsWith("[+]", StringComparison.OrdinalIgnoreCase) || msg.Contains("Dump completed successfully", StringComparison.OrdinalIgnoreCase) || msg.Contains("written.", StringComparison.OrdinalIgnoreCase) || msg.Contains("successfully validated", StringComparison.OrdinalIgnoreCase))
-                {
-                    brush = BrushSuccess;
-                }
-                else if (msg.StartsWith("    -", StringComparison.Ordinal))
-                {
-                    brush = BrushSubtle;
-                }
-                else
-                {
-                    brush = BrushInfo;
-                }
+            Brush brush = BrushInfo;
+            if (msg.StartsWith("[x]", StringComparison.OrdinalIgnoreCase) || msg.Contains("ERROR", StringComparison.OrdinalIgnoreCase) || msg.Contains("Exception", StringComparison.OrdinalIgnoreCase))
+            {
+                brush = BrushError;
+            }
+            else if (msg.StartsWith("[!]", StringComparison.OrdinalIgnoreCase) || msg.Contains("WARN", StringComparison.OrdinalIgnoreCase))
+            {
+                brush = BrushWarn;
+            }
+            else if (msg.StartsWith("[+]", StringComparison.OrdinalIgnoreCase) || msg.Contains("Dump completed successfully", StringComparison.OrdinalIgnoreCase) || msg.Contains("written.", StringComparison.OrdinalIgnoreCase) || msg.Contains("successfully validated", StringComparison.OrdinalIgnoreCase))
+            {
+                brush = BrushSuccess;
+            }
+            else if (msg.StartsWith("    -", StringComparison.Ordinal))
+            {
+                brush = BrushSubtle;
+            }
+            else
+            {
+                brush = BrushInfo;
+            }
 
-                bool autoScroll = _logScrollViewer == null || _logScrollViewer.VerticalOffset >= _logScrollViewer.ScrollableHeight - 16;
-
-                if (_logEntries.Count >= 2500)
-                {
-                    _logEntries.RemoveAt(0);
-                }
-
-                _logEntries.Add(new LogEntry(msg, brush));
-
-                if (autoScroll && _logScrollViewer != null)
-                {
-                    _logScrollViewer.ScrollToBottom();
-                }
-            });
+            _pendingLogQueue.Enqueue(new LogEntry(msg, brush));
         };
 
         try
@@ -560,6 +586,8 @@ public partial class MainWindow : FluentWindow
         }
         finally
         {
+            _logFlushTimer.Stop();
+            FlushLogQueue();
             BtnStart.IsEnabled = true;
             BtnDecryptOnly.IsEnabled = true;
             BtnCancel.IsEnabled = false;

@@ -27,4 +27,19 @@ public class DecompilerTests
         string actual = Il2CppDecompiler.SanitizeFileName(input);
         Assert.Equal(expected, actual);
     }
+
+    [Fact]
+    public void NamespaceSplitting_FiltersEmptyAndObfuscatedSegments()
+    {
+        string ns = "MyGame..Subsystem...Core";
+        var parts = ns.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(3, parts.Length);
+        Assert.Equal("MyGame", parts[0]);
+        Assert.Equal("Subsystem", parts[1]);
+        Assert.Equal("Core", parts[2]);
+
+        string emptyNs = "....";
+        var emptyParts = emptyNs.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Empty(emptyParts);
+    }
 }

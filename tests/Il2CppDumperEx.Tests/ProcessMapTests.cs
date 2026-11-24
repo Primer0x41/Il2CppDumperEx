@@ -42,7 +42,8 @@ namespace Il2CppDumperEx.Tests
                 Assert.Equal(0x1000UL, baseAddress);
                 Assert.Equal(0x2000, elfStream.Length);
 
-                byte[] reconstructed = elfStream.ToArray();
+                byte[] reconstructed = new byte[elfStream.Length];
+                elfStream.ReadExactly(reconstructed, 0, reconstructed.Length);
                 Assert.Equal(0x7F, reconstructed[0]);
                 Assert.Equal((byte)'E', reconstructed[1]);
                 Assert.Equal(0xAA, reconstructed[0x1000]);
@@ -86,14 +87,29 @@ namespace Il2CppDumperEx.Tests
                 bool success = ProcessMapReader.TryReconstructElf(mapsPath, out var elfStream, out ulong baseAddress);
                 Assert.True(success);
                 Assert.NotNull(elfStream);
-                // Should compact into 0x2000 total size rather than 512MB
-                Assert.Equal(0x2000, elfStream.Length);
+                Assert.IsType<SparseMemoryStream>(elfStream);
+                // Virtual span from 0x10000000 to 0x30001000 without allocating 512MB RAM
+                Assert.Equal(0x20001000, elfStream.Length);
 
-                byte[] bytes = elfStream.ToArray();
-                Assert.Equal(0x7F, bytes[0]);
-                Assert.Equal((byte)'E', bytes[1]);
-                Assert.Equal(0x11, bytes[0x1000]);
-                Assert.Equal(0x22, bytes[0x1001]);
+                byte[] head = new byte[4];
+                elfStream.Position = 0;
+                elfStream.ReadExactly(head, 0, 4);
+                Assert.Equal(0x7F, head[0]);
+                Assert.Equal((byte)'E', head[1]);
+
+                // Verify reading at sparse virtual address gap returns zeros
+                byte[] gap = new byte[2];
+                elfStream.Position = 0x1000;
+                elfStream.ReadExactly(gap, 0, 2);
+                Assert.Equal(0, gap[0]);
+                Assert.Equal(0, gap[1]);
+
+                // Verify reading at chunk 2 virtual address (0x30000000 - 0x10000000 = 0x20000000)
+                byte[] tail = new byte[2];
+                elfStream.Position = 0x20000000;
+                elfStream.ReadExactly(tail, 0, 2);
+                Assert.Equal(0x11, tail[0]);
+                Assert.Equal(0x22, tail[1]);
             }
             finally
             {

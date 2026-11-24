@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-MetaDumper / Il2CppDumper Ghidra Redux Script
+Il2CppDumperEx Ghidra Redux Script
 Enhanced loader for Ghidra 10.x / 11.x:
 - Namespace hierarchy & class organization
 - Function recovery and signature application via ApplyFunctionSignatureCmd
@@ -91,7 +91,7 @@ def apply_signature(addr, signature_str):
     except Exception:
         pass
 
-f = askFile("Select script.json from Il2CppDumper / MetaDumper", "Open")
+f = askFile("Select script.json from Il2CppDumperEx", "Open")
 if not f or not f.exists():
     print("Script file selection cancelled or file does not exist.")
 else:

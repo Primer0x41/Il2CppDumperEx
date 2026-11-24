@@ -334,6 +334,8 @@ public static class Nep2Decryptor
         long fileLength = new FileInfo(inputPath).Length;
         if (fileLength < MinimumFileSize)
             throw new MetadataTooSmallException($"File too small ({fileLength} bytes, minimum {MinimumFileSize}).");
+        if (fileLength > int.MaxValue)
+            throw new Nep2Exception($"File size ({fileLength} bytes) exceeds maximum supported 2GB limit.");
 
         using var fin = new FileStream(inputPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 65536);
 

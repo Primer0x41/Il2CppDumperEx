@@ -232,7 +232,10 @@ public static class GameDiscovery
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ExtractNsoTitleName] Exception: {ex.Message}");
+        }
 
         return null;
     }
@@ -308,7 +311,10 @@ public static class GameDiscovery
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ExtractPlayStationTitleName] Exception: {ex.Message}");
+        }
 
         return null;
     }
@@ -386,7 +392,10 @@ public static class GameDiscovery
                 return match.Groups[1].Value;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ScanBinaryForUnityVersion] Exception: {ex.Message}");
+        }
         return null;
     }
 
@@ -440,7 +449,10 @@ public static class GameDiscovery
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[FindMetadata] Error checking {file}: {ex.Message}");
+                    }
                 }
             }
         }
@@ -615,12 +627,41 @@ public static class GameDiscovery
                 }
 
                 var binaryEntries = archive.Entries.Where(e =>
-                    e.FullName.EndsWith("libil2cpp.so", StringComparison.OrdinalIgnoreCase) ||
-                    e.FullName.EndsWith("GameAssembly.dll", StringComparison.OrdinalIgnoreCase) ||
-                    e.FullName.EndsWith("UnityFramework", StringComparison.OrdinalIgnoreCase)).ToList();
+                {
+                    string fn = e.Name;
+                    if (string.IsNullOrEmpty(fn)) return false;
+
+                    // Known IL2CPP binary names
+                    foreach (var binName in Il2CppBinaries)
+                    {
+                        if (fn.Equals(Path.GetFileName(binName), StringComparison.OrdinalIgnoreCase))
+                            return true;
+                    }
+
+                    // Console & Switch binaries inside archives
+                    if (fn.Equals("eboot.bin", StringComparison.OrdinalIgnoreCase) ||
+                        fn.Equals("Il2CppUserAssemblies.prx", StringComparison.OrdinalIgnoreCase) ||
+                        fn.EndsWith(".nso", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    // iOS .ipa binary inside Payload/<App>.app/<App>
+                    if (e.FullName.StartsWith("Payload/", StringComparison.OrdinalIgnoreCase) &&
+                        e.FullName.Contains(".app/", StringComparison.OrdinalIgnoreCase) &&
+                        !fn.Contains('.'))
+                    {
+                        return true;
+                    }
+
+                    return false;
+                }).ToList();
 
                 var preferredBinary = binaryEntries.FirstOrDefault(e => e.FullName.Contains("arm64-v8a", StringComparison.OrdinalIgnoreCase))
                     ?? binaryEntries.FirstOrDefault(e => e.FullName.Contains("armeabi-v7a", StringComparison.OrdinalIgnoreCase))
+                    ?? binaryEntries.FirstOrDefault(e => e.FullName.EndsWith("UnityFramework", StringComparison.OrdinalIgnoreCase))
+                    ?? binaryEntries.FirstOrDefault(e => e.FullName.EndsWith("GameAssembly.dll", StringComparison.OrdinalIgnoreCase))
+                    ?? binaryEntries.FirstOrDefault(e => e.FullName.EndsWith("libil2cpp.so", StringComparison.OrdinalIgnoreCase))
                     ?? binaryEntries.FirstOrDefault();
 
                 if (preferredBinary != null)
@@ -661,7 +702,10 @@ public static class GameDiscovery
                     Directory.Delete(tempExtractDir, true);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ExtractAndDiscoverArchive] Error cleaning temp extraction dir: {ex.Message}");
+            }
             throw;
         }
     }

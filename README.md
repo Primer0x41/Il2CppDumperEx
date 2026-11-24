@@ -5,9 +5,6 @@
 # Il2CppDumperEx
 
 <p align="center">
-  <a href="https://github.com/Primer0x41/Il2CppDumperEx/releases">
-    <img src="https://img.shields.io/github/downloads/Primer0x41/Il2CppDumperEx/total?style=for-the-badge&logo=github&color=38BDF8" alt="Downloads">
-  </a>
   <img src="https://img.shields.io/badge/C%23-13.0-239120?style=for-the-badge&logo=csharp&logoColor=white" alt="C# 13">
   <img src="https://img.shields.io/badge/.NET-11.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 11.0">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge&logo=linux&logoColor=white" alt="Multi-Platform">
@@ -25,7 +22,10 @@
 
 - **Automated Game Discovery:** Drop a game executable, `<Game>_Data` folder, or direct archive package (`.apk`, `.aab`, `.zip`, `.ipa`). Automatically isolates binaries (`GameAssembly.dll`, `libil2cpp.so`, `UnityFramework`, `main.nso`, `Il2CppUserAssemblies.prx`, `eboot.bin`, `maps.txt`) and `global-metadata.dat`.
 - **In-Memory NEP2 Decryption:** Identifies and decrypts protected metadata using precomputed tiled substitution masks on the fly, or via standalone `--decrypt-only` mode.
-- **Multi-Platform Containers:** Native unwrapping for Nintendo Switch NSO (Zstandard/LZ4), PlayStation 4/5 SElf, Apple iOS/macOS Mach-O Fat slices, and reconstructed Linux/Android `/proc/<pid>/maps` dumps.
+- **Unity 6 (v38+) & Modern .NET Support:** In-process pattern search and symbol heuristics supporting `System.Private.CoreLib.dll` and metadata versions up to v39 / Unity 6 (v104–v110).
+- **Multi-Platform Containers:** Native unwrapping for Nintendo Switch NSO (Zstandard/LZ4 with `R_AARCH64_GLOB_DAT`/`JUMP_SLOT` relocations), PlayStation 4/5 SElf, Apple iOS/macOS Mach-O Fat slices, and reconstructed Linux/Android `/proc/<pid>/maps` dumps via on-demand virtual sparse streams.
+- **High-Performance Parallel Export:** Multi-threaded dummy assembly export via `Parallel.ForEach` with automatic sequential fallback.
+- **Mod Project Scaffolding:** Emits ready-to-build `.NET Standard 2.1` / C# plugin project (`ModProject/`) configured to link against exported dummy assemblies with zero manual setup.
 - **Packer & Entropy Analysis:** Detects commercial packers (ACE, YiDun, SecNeo, VMProtect, Themida, Denuvo) and measures code segment Shannon entropy.
 - **Disassembler Integration:** Generates standard `il2cpp.h`, `script.json`, `stringliteral.json`, unified `metadata.json`, and configurable C# decompiler output (single file, split by assembly, or split by namespace tree).
 

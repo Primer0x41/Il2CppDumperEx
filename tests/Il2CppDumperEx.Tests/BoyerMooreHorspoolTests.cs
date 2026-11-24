@@ -67,4 +67,42 @@ public class BoyerMooreHorspoolTests
 
         Assert.Empty(matches);
     }
+
+    [Fact]
+    public void Search_StringPattern_WithTrailingWildcard_FindsOccurrences()
+    {
+        byte[] source = new byte[] { 0xAA, 0xBB, 0xCC, 0xDD, 0xAA, 0xBB, 0xEE };
+        string pattern = "AA BB ?";
+
+        var matches = source.Search(pattern).ToList();
+
+        Assert.Equal(2, matches.Count);
+        Assert.Equal(0, matches[0]);
+        Assert.Equal(4, matches[1]);
+    }
+
+    [Fact]
+    public void Search_StringPattern_WithDoubleQuestionMarkWildcard_FindsOccurrences()
+    {
+        byte[] source = new byte[] { 0x10, 0x20, 0x30, 0x00, 0x00, 0x10, 0xFF, 0x30 };
+        string pattern = "10 ?? 30";
+
+        var matches = source.Search(pattern).ToList();
+
+        Assert.Equal(2, matches.Count);
+        Assert.Equal(0, matches[0]);
+        Assert.Equal(5, matches[1]);
+    }
+
+    [Fact]
+    public void Search_StringPattern_MixedWildcards_FindsOccurrences()
+    {
+        byte[] source = new byte[] { 0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10 };
+        string pattern = "48 ?? 5C ? 08";
+
+        var matches = source.Search(pattern).ToList();
+
+        Assert.Single(matches);
+        Assert.Equal(0, matches[0]);
+    }
 }

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-MetaDumper / Il2CppDumper Binary Ninja Redux Script
+Il2CppDumperEx Binary Ninja Redux Script
 Enhanced loader for Binary Ninja 3.x / 4.x:
 - Component folder hierarchy matching C# namespaces
 - Automatic type parsing from il2cpp.h using parse_types_from_string
@@ -27,7 +27,7 @@ def get_addr(bv: BinaryView, addr: int) -> int:
 
 class Il2CppReduxTask(BackgroundTaskThread):
     def __init__(self, bv: BinaryView, script_path: str, header_path: str):
-        super().__init__("MetaDumper Redux: Processing Il2Cpp metadata...", True)
+        super().__init__("Il2CppDumperEx: Processing Il2Cpp metadata...", True)
         self.bv = bv
         self.script_path = script_path
         self.header_path = header_path
@@ -56,7 +56,7 @@ class Il2CppReduxTask(BackgroundTaskThread):
         if not exists(self.header_path):
             log_warn(f"Header file not found: {self.header_path}")
             return
-        self.progress = "MetaDumper: Parsing C header types (1/3)..."
+        self.progress = "Il2CppDumperEx: Parsing C header types (1/3)..."
         try:
             with open(self.header_path, "r", encoding="utf-8", errors="replace") as f:
                 header_text = f.read()
@@ -67,7 +67,7 @@ class Il2CppReduxTask(BackgroundTaskThread):
                     if self.cancelled:
                         return
                     if idx % 200 == 0 and total > 0:
-                        self.progress = f"MetaDumper: Registering types {idx}/{total} ({idx*100/total:.1f}%)..."
+                        self.progress = f"Il2CppDumperEx: Registering types {idx}/{total} ({idx*100/total:.1f}%)..."
                     if not self.bv.get_type_by_name(name):
                         self.bv.define_user_type(name, typ)
                 self.has_types = True
@@ -78,13 +78,13 @@ class Il2CppReduxTask(BackgroundTaskThread):
     def process_methods(self, data: dict):
         script_methods = data.get("ScriptMethod", [])
         total = len(script_methods)
-        self.progress = "MetaDumper: Processing methods (2/3)..."
+        self.progress = "Il2CppDumperEx: Processing methods (2/3)..."
 
         for idx, method in enumerate(script_methods):
             if self.cancelled:
                 return
             if idx % 200 == 0 and total > 0:
-                self.progress = f"MetaDumper: Applying methods {idx}/{total} ({idx*100/total:.1f}%)..."
+                self.progress = f"Il2CppDumperEx: Applying methods {idx}/{total} ({idx*100/total:.1f}%)..."
 
             raw_addr = method.get("Address", 0)
             addr = get_addr(self.bv, raw_addr)
@@ -127,14 +127,14 @@ class Il2CppReduxTask(BackgroundTaskThread):
     def process_strings(self, data: dict):
         script_strings = data.get("ScriptString", [])
         total = len(script_strings)
-        self.progress = "MetaDumper: Processing strings (3/3)..."
+        self.progress = "Il2CppDumperEx: Processing strings (3/3)..."
 
         str_comp = self.get_or_create_component("Strings")
         for idx, item in enumerate(script_strings, start=1):
             if self.cancelled:
                 return
             if idx % 500 == 0 and total > 0:
-                self.progress = f"MetaDumper: Processing strings {idx}/{total} ({idx*100/total:.1f}%)..."
+                self.progress = f"Il2CppDumperEx: Processing strings {idx}/{total} ({idx*100/total:.1f}%)..."
 
             addr = get_addr(self.bv, item.get("Address", 0))
             val = item.get("Value", "")
@@ -147,7 +147,7 @@ class Il2CppReduxTask(BackgroundTaskThread):
             self.bv.set_comment_at(addr, val)
 
     def run(self):
-        log_info("MetaDumper Redux: Starting Binary Ninja import task...")
+        log_info("Il2CppDumperEx: Starting Binary Ninja import task...")
         self.process_header()
         if not exists(self.script_path):
             log_error(f"script.json not found: {self.script_path}")
@@ -159,13 +159,13 @@ class Il2CppReduxTask(BackgroundTaskThread):
         self.process_methods(data)
         self.process_strings(data)
         self.bv.update_analysis()
-        log_info("MetaDumper Redux: Successfully finished import!")
+        log_info("Il2CppDumperEx: Successfully finished import!")
 
 def run_redux_script(bv: BinaryView):
     from binaryninja.interaction import OpenFileNameField, get_form_input
     f_script = OpenFileNameField("script.json file")
     f_header = OpenFileNameField("il2cpp.h file (optional)")
-    if not get_form_input([f_script, f_header], "MetaDumper / Il2CppDumper Redux"):
+    if not get_form_input([f_script, f_header], "Il2CppDumperEx"):
         return
     if not f_script.result:
         return
@@ -173,4 +173,4 @@ def run_redux_script(bv: BinaryView):
     task = Il2CppReduxTask(bv, f_script.result, f_header.result or "")
     task.start()
 
-PluginCommand.register("MetaDumper\\Import script.json & il2cpp.h (Redux)", "Loads Il2Cpp symbols and organizes functions into component folders", run_redux_script)
+PluginCommand.register("Il2CppDumperEx\\Import script.json & il2cpp.h (Redux)", "Loads Il2Cpp symbols and organizes functions into component folders", run_redux_script)

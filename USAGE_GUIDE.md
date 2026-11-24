@@ -44,8 +44,8 @@ Expand the **Advanced Options** drawer to configure:
   - `Single file (dump.cs)`: Emits all decompiled declarations into one file.
   - `Split by Assembly`: Emits separate files per assembly into `CSharp/<AssemblyName>.cs`.
   - `Split by Namespace`: Generates a directory tree matching the namespace hierarchy with one source file per leaf namespace (e.g. `CSharp/UnityEngine/UI.cs` contains all types in `UnityEngine.UI`, or `CSharp/Global.cs` for types without a namespace).
-- **Output Artifact Toggles:** Toggle generation of `Dummy DLLs`, `C# Pseudocode`, `C/C++ Headers & Script JSON`, and `Unified JSON (metadata.json)`.
-- **Dump Content Checkboxes:** Selectively toggle inclusion of `Methods`, `Method offsets`, `Fields`, `Field offsets`, `Properties`, and `Attributes`. *(Note: TypeDef indices and DummyDll tokens are enabled by default in the GUI and can be toggled in headless mode using the `--no-typedef-index` and `--no-token` CLI flags).*
+- **Output Artifact Toggles:** Toggle generation of `Dummy DLLs`, `C# Pseudocode`, `C/C++ Headers & Script JSON`, `Unified JSON (metadata.json)`, and `Mod Project (.csproj)`.
+- **Dump Content Checkboxes:** Selectively toggle inclusion of `Methods`, `Method offsets`, `Fields`, `Field offsets`, `Properties`, `Attributes`, `TypeDef index`, and `DummyDll tokens`.
 
 ### 3. Execution & Artifact Navigation
 Click **Start Dump**. The integrated log console streams live pipeline output, including packer detection, code entropy ratings, NEP2 decryption milestones, and validated string counts. Once completed, click **Open Output Folder** to immediately browse your outputs in Windows Explorer.
@@ -84,6 +84,7 @@ Il2CppDumperEx <game_path_or_metadata> [options]
 | `--force-version` | `<integer>` | Overrides version auto-detection and forces a specific metadata version (e.g. `29`, `31`, `38`) | Auto-detect |
 | `--split-mode` | `<mode>` | C# decompiler output mode: `none` (`dump.cs`), `assembly` (`CSharp/<Asm>.cs`), `namespace` (`CSharp/<Parent>/<Leaf>.cs`) | `none` |
 | `--unified-json` | *None* | Generates consolidated `metadata.json` symbol map for external tools and automation | Disabled |
+| `--gen-mod-project` | *None* | Emits ready-to-build `.NET Standard 2.1` C# plugin project (`ModProject/`) referencing DummyDll | Disabled |
 | `--no-cs` | *None* | Skips decompiling C# source code (`dump.cs` or `CSharp/` directory) | Enabled |
 | `-v`, `--verbose` | *None* | Enables detailed diagnostic logs, memory offsets, and exception stack traces | Disabled |
 | `--no-dummy-dll` | *None* | Skips generating stripped .NET reference assemblies (`DummyDll/`) | Enabled |
@@ -133,7 +134,13 @@ Decrypts a protected `global-metadata.dat` file directly without needing game bi
 Il2CppDumperEx "C:\Games\TargetGame\global-metadata.dat" --decrypt-only "C:\Dumps\decrypted_metadata.dat"
 ```
 
-#### 6. Headless CI / Batch Build Pipeline
+#### 6. Generate Ready-to-Build Mod Plugin Scaffolding
+Dumps stripped dummy DLLs and generates a ready-to-compile `.NET Standard 2.1` C# plugin project linking against the exported assemblies:
+```bash
+Il2CppDumperEx "C:\Games\TargetGame" --gen-mod-project --out "C:\Dumps\TargetGame"
+```
+
+#### 7. Headless CI / Batch Build Pipeline
 Runs silently, emits only essential artifacts without reference DLLs:
 ```bash
 Il2CppDumperEx "C:\Builds\MyGame" --out "C:\Artifacts" --no-dummy-dll
@@ -188,12 +195,12 @@ Il2CppDumperEx features an automated memory reconstruction engine:
    7b4a000000-7b4a200000 r-xp 00000000 ... /data/app/.../libil2cpp.so
    ```
    It filters for mapped memory regions associated with `libil2cpp.so` and calculates the minimum base virtual address (`baseAddress`) and total memory span (`maxEnd - minStart`).
-3. **Chunk Matching & Assembly:** The reader discovers all dumped memory chunk files matching the pattern:
+3. **Chunk Matching & Virtual Sparse Stream Assembly:** The reader discovers all dumped memory chunk files matching the pattern:
    ```text
    <prefix>-<start_hex>-<end_hex>.bin
    ```
-   (e.g., `dump-7b4a000000-7b4a200000.bin`). It verifies that all chunks fall within the virtual range, orders them by starting address, and stitches them into a contiguous, zero-padded `MemoryStream`.
-4. **ELF Re-alignment:** If the original ELF header is situated at `baseAddress`, the resulting memory stream is loaded as a 64-bit or 32-bit ELF image, enabling the decompilation engine to resolve method pointers and string literals against live runtime memory.
+   (e.g., `dump-7b4a000000-7b4a200000.bin`). It verifies that all chunks fall within the virtual range and orders them by starting address. When the total address span exceeds 256 MB, it backs the reconstruction with an on-demand `SparseMemoryStream` that translates virtual addresses and returns zero-filled spans virtually, avoiding multi-gigabyte RAM allocation for unmapped address gaps.
+4. **ELF Re-alignment:** If the original ELF header is situated at `baseAddress`, the resulting stream is loaded as a 64-bit or 32-bit ELF image, enabling the decompilation engine to resolve method pointers and string literals against live runtime memory.
 
 ```bash
 # Point directly to directory containing maps.txt and .bin chunks
@@ -255,6 +262,7 @@ Il2CppDumperEx "C:\Games\TargetGame\global-metadata.dat" --decrypt-only "C:\Dump
 Nintendo Switch `main.nso` executables store `.text`, `.rodata`, and `.data` segments. Recent Switch SDKs compress these segments using Zstandard (`ZBIC`) or LZ4.
 - `NSO.cs` reads segment headers, validates uncompressed sizes, and automatically detects compression flags.
 - Decompresses segments in-memory into contiguous executable memory buffers before symbol mapping.
+- Automatically handles AArch64 dynamic relocations including `R_AARCH64_GLOB_DAT` (1025) and `R_AARCH64_JUMP_SLOT` (1026).
 
 ---
 
@@ -265,7 +273,22 @@ PlayStation 4 and PlayStation 5 executables (`.prx`, `eboot.bin`, `libil2cpp.so`
 
 ---
 
-### 6. Anti-Cheat, Packer & Shannon Entropy Fingerprinting
+### 6. In-Process Unity 6 (v38+) & Modern .NET Heuristics
+
+Modern Unity 6 engines utilize CoreCLR-style architecture with `System.Private.CoreLib.dll` rather than legacy `mscorlib.dll`, and reorganize `CodeRegistration` / `MetadataRegistration` structures.
+- Pattern search recognizes both `mscorlib.dll` and `System.Private.CoreLib.dll`.
+- Native in-process heuristic search scans pointer arrays directly within `Il2Cpp.cs` to resolve `CodeRegistration` and `MetadataRegistration` symbols deterministically without external process execution.
+
+---
+
+### 7. High-Performance Parallel Dummy DLL Export & Mod Scaffolding
+
+- **Parallel Assembly Generation:** `DummyAssemblyExporter.cs` dispatches assembly generation across available CPU cores via `Parallel.ForEach`, drastically speeding up export for games with hundreds of assemblies while retaining automatic fallback to single-threaded export if needed.
+- **Ready-to-Build Mod Project Scaffolding:** Emitting `--gen-mod-project` (or enabling the GUI toggle) creates `ModProject/<GameName>.csproj` targeting `netstandard2.1` and configured with relative references to `../DummyDll/*.dll` plus a boilerplate `Plugin.cs`, providing a zero-setup start for C# gameplay modding or harmony hook development.
+
+---
+
+### 8. Anti-Cheat, Packer & Shannon Entropy Fingerprinting
 
 During discovery, `ProtectorDetector.cs` performs diagnostic checks:
 - **Commercial Packer & Wrapper Signatures:** Detects Tencent Legu/ACE (`libshell.so`, `libtersafe.so`), NetEase YiDun (`libnesec.so`), SecNeo (`libsecmain.so`), Qihoo 360 Jiagu (`libjiagu.so`), and Ijiami (`libexec.so`).
